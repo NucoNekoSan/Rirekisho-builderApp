@@ -11,9 +11,9 @@ describe('LegalPage', () => {
     expect(screen.getByRole('link', { name: /お問い合わせフォーム/ })).toHaveAttribute('href', 'https://nuconeko-garden.com/contact/?work=rirekisho-studio');
   });
 
-  it('publishes the service terms and MIT license', () => {
+  it('publishes the service terms and contact route', () => {
     render(<MemoryRouter><LegalPage kind="terms" /></MemoryRouter>);
     expect(screen.getByRole('heading', { name: '利用規約' })).toBeInTheDocument();
-    expect(screen.getByText(/MIT License/)).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /お問い合わせフォーム/ })).toHaveAttribute('href', 'https://nuconeko-garden.com/contact/?work=rirekisho-studio');
   });
 });

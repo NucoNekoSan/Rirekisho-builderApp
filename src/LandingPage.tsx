@@ -17,7 +17,6 @@ export function LandingPage() {
           <a href="#features">機能</a>
           <a href="#privacy">プライバシー</a>
           <Link to="/terms">利用規約</Link>
-          <a href="https://github.com/NucoNekoSan/Rirekisho-builderApp" target="_blank" rel="noreferrer">GitHub</a>
         </nav>
       </header>
       <main id="top">
@@ -27,7 +26,7 @@ export function LandingPage() {
           <p className="landing-lead">日本向けの履歴書を入力し、A4・A3のPDFとして保存できる無料ツールです。個人情報はCloudflareや運営者のサーバーへ保存しません。</p>
           <div className="landing-actions">
             <Link className="landing-primary" to="/app">履歴書を作成する</Link>
-            <a className="landing-secondary" href="https://github.com/NucoNekoSan/Rirekisho-builderApp" target="_blank" rel="noreferrer">ソースコードを見る</a>
+            <a className="landing-secondary" href="/manual/">使い方を見る</a>
           </div>
           <p className="landing-note">アカウント登録不要・ブラウザだけで利用できます</p>
         </section>
