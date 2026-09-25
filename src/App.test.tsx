@@ -139,6 +139,26 @@ describe('App accessibility labels', () => {
     );
   });
 
+  it('opens a large editor for long text and reflects edits immediately', async () => {
+    render(<App />);
+
+    const motivation = screen.getByLabelText('志望動機');
+    expect(screen.getByRole('button', { name: '志望動機を大きく編集' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '自己PRを大きく編集' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '作業メモを大きく編集' })).toBeInTheDocument();
+
+    fireEvent.click(motivation);
+
+    const dialog = await screen.findByRole('dialog', { name: '志望動機を大きく編集' });
+    const expandedEditor = within(dialog).getByRole('textbox', { name: '志望動機' });
+    expect(expandedEditor).toHaveAttribute('maxlength', '350');
+
+    fireEvent.change(expandedEditor, { target: { value: '文章全体を確認しながら編集' } });
+
+    expect(motivation).toHaveValue('文章全体を確認しながら編集');
+    expect(within(dialog).getByText('13 / 350文字')).toBeInTheDocument();
+  });
+
   it('keeps legacy over-limit text, blocks PDF output, and allows reducing it to the limit', async () => {
     const state = createDefaultState();
     state.resume.selfPr = '自'.repeat(432);
