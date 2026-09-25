@@ -173,8 +173,15 @@ const validateBasic = (value: unknown): BasicInfo => {
 
 const validateResume = (value: unknown, includePhoto: boolean): ResumeData => {
   const resume = asRecord(value);
+  const legacyApplicationType = resume.applicationType === 'disability' ? 'disability' : 'general';
+  const enabledSupplements = resume.enabledSupplements === undefined
+    ? (legacyApplicationType === 'disability' ? ['accommodation'] : [])
+    : (Array.isArray(resume.enabledSupplements)
+        && resume.enabledSupplements.every((item) => item === 'accommodation')
+      ? [...new Set(resume.enabledSupplements)]
+      : (() => { throw invalidSaveFile(); })());
   return {
-    applicationType: asEnum(resume.applicationType, ['general', 'disability']),
+    enabledSupplements,
     inputMode: 'standard',
     eraMode: asEnum(resume.eraMode, ['western', 'japanese']),
     pdfFontFamily: validatePdfFontFamily(resume.pdfFontFamily),
@@ -224,14 +231,19 @@ const validateAppState = (value: unknown, includePhoto: boolean, includeAccommod
   const resume = validateResume(state.resume, includePhoto);
   return {
     resume,
-    accommodation: includeAccommodation && resume.applicationType === 'disability'
+    accommodation: includeAccommodation && resume.enabledSupplements.includes('accommodation')
       ? validateAccommodation(state.accommodation)
       : createDefaultAccommodation(),
   };
 };
 
-export const buildProjectFile = (state: AppState, includePhoto: boolean): ProjectFile => {
-  const includeAccommodation = state.resume.applicationType === 'disability';
+export const buildProjectFile = (
+  state: AppState,
+  includePhoto: boolean,
+  documentId: string = crypto.randomUUID(),
+  documentName = '名称未設定の履歴書',
+): ProjectFile => {
+  const includeAccommodation = state.resume.enabledSupplements.includes('accommodation');
   const projectState: AppState = includePhoto
     ? state
     : {
@@ -246,6 +258,8 @@ export const buildProjectFile = (state: AppState, includePhoto: boolean): Projec
     schemaVersion: PROJECT_SCHEMA_VERSION,
     exportedAt: new Date().toISOString(),
     app: APP_NAME,
+    documentId,
+    documentName,
     includePhoto,
     includeAccommodation,
     state: includeAccommodation
@@ -257,10 +271,20 @@ export const buildProjectFile = (state: AppState, includePhoto: boolean): Projec
   };
 };
 
-export const serializeProjectFile = (state: AppState, includePhoto: boolean): string =>
-  JSON.stringify(buildProjectFile(state, includePhoto), null, 2);
+export const serializeProjectFile = (
+  state: AppState,
+  includePhoto: boolean,
+  documentId?: string,
+  documentName?: string,
+): string => JSON.stringify(buildProjectFile(state, includePhoto, documentId, documentName), null, 2);
 
-export const parseProjectFile = (text: string): AppState => {
+export interface ParsedProjectFile {
+  documentId: string;
+  documentName: string;
+  state: AppState;
+}
+
+export const parseProjectFileDocument = (text: string): ParsedProjectFile => {
   if (text.length > SAVE_FILE_MAX_CHARS) {
     throw new Error('入力データファイルが大きすぎます。写真を含める場合は写真サイズ上限を確認してください。');
   }
@@ -273,10 +297,18 @@ export const parseProjectFile = (text: string): AppState => {
   }
 
   const project = asRecord(parsed);
-  if (project.schemaVersion !== PROJECT_SCHEMA_VERSION || project.app !== APP_NAME || typeof project.exportedAt !== 'string') {
+  const schemaVersion = project.schemaVersion;
+  const isLegacy = schemaVersion === 1 && project.app === 'Rirekisho Builder';
+  if ((!isLegacy && (schemaVersion !== PROJECT_SCHEMA_VERSION || project.app !== APP_NAME)) || typeof project.exportedAt !== 'string') {
     throw new Error('対応していない入力データファイルです。');
   }
   const includePhoto = asOptionalBoolean(project.includePhoto);
   const includeAccommodation = asOptionalBoolean(project.includeAccommodation);
-  return validateAppState(project.state, includePhoto, includeAccommodation);
+  return {
+    documentId: isLegacy ? crypto.randomUUID() : asString(project.documentId, 80),
+    documentName: isLegacy ? '読み込んだ履歴書' : asString(project.documentName, 120),
+    state: validateAppState(project.state, includePhoto, includeAccommodation),
+  };
 };
+
+export const parseProjectFile = (text: string): AppState => parseProjectFileDocument(text).state;

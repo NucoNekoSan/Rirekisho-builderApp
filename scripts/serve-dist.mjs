@@ -22,9 +22,9 @@ const mimeTypes = new Map([
   ['.woff2', 'font/woff2'],
 ]);
 
-const htaccess = await readFile(path.join(distRoot, '.htaccess'), 'utf8');
+const headersFile = await readFile(path.join(distRoot, '_headers'), 'utf8');
 const securityHeaders = new Map();
-for (const match of htaccess.matchAll(/^\s*Header set ([\w-]+) "([^"]*)"/gm)) {
+for (const match of headersFile.matchAll(/^\s{2}([\w-]+):\s*(.+)$/gm)) {
   securityHeaders.set(match[1], match[2]);
 }
 

@@ -55,12 +55,12 @@ for (const relativePath of productionFiles) {
   }
 }
 
-const htaccess = await readFile(path.join(root, 'public', '.htaccess'), 'utf8');
-const csp = htaccess.match(/Content-Security-Policy "([^"]+)"/)?.[1] ?? '';
-if (!csp) failures.push('public/.htaccess: Content-Security-Policy is missing');
-if (/\bunsafe-eval\b/.test(csp)) failures.push("public/.htaccess: CSP permits 'unsafe-eval'");
-if (/script-src[^;]*unsafe-inline/.test(csp)) failures.push("public/.htaccess: script-src permits 'unsafe-inline'");
-if (/(?:^|;)\s*(?:default|script|connect|frame)-src[^;]*\*/.test(csp)) failures.push('public/.htaccess: CSP contains a wildcard source');
+const headers = await readFile(path.join(root, 'public', '_headers'), 'utf8');
+const csp = headers.match(/^\s*Content-Security-Policy:\s*(.+)$/m)?.[1] ?? '';
+if (!csp) failures.push('public/_headers: Content-Security-Policy is missing');
+if (/\bunsafe-eval\b/.test(csp)) failures.push("public/_headers: CSP permits 'unsafe-eval'");
+if (/script-src[^;]*unsafe-inline/.test(csp)) failures.push("public/_headers: script-src permits 'unsafe-inline'");
+if (/(?:^|;)\s*(?:default|script|connect|frame)-src[^;]*\*/.test(csp)) failures.push('public/_headers: CSP contains a wildcard source');
 
 async function collectDistFiles(relativeDirectory = 'dist') {
   const files = [];

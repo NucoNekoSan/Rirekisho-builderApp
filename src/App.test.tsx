@@ -114,7 +114,7 @@ describe('App accessibility labels', () => {
     expect(motivation.getAttribute('aria-describedby')).toContain(motivationGuidance.id);
 
     expect(screen.getByLabelText('基本情報の入力の注意')).toBeInTheDocument();
-    expect(screen.getByText('作業メモはPDFに出ません。支援員と確認する内容に使えます。')).toBeInTheDocument();
+    expect(screen.getByText('作業メモはPDFに出ません。下書きや面接前の確認に使えます。')).toBeInTheDocument();
   });
 
   it('limits motivation and self PR to 350 characters with accessible counters', () => {
@@ -321,8 +321,8 @@ describe('App accessibility labels', () => {
   it('hides sensitive accommodation inputs for general applications', () => {
     render(<App />);
 
-    expect(screen.getByText('一般応募では配慮事項シートを作成しません')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: '障害者雇用応募に切り替える' })).toBeInTheDocument();
+    expect(screen.getByText('配慮事項シートは無効です')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '配慮事項シートを有効にする' })).toBeInTheDocument();
     expect(screen.queryByRole('textbox', { name: '障害名・診断名' })).not.toBeInTheDocument();
     expect(screen.queryByRole('textbox', { name: '通院状況' })).not.toBeInTheDocument();
   });
@@ -364,7 +364,7 @@ describe('App accessibility labels', () => {
   it('provides page switching controls for disability application previews', () => {
     render(<App />);
 
-    fireEvent.click(screen.getByRole('radio', { name: '障害者雇用応募' }));
+    fireEvent.click(screen.getByRole('checkbox', { name: '配慮事項シートを作成する' }));
 
     expect(screen.getByRole('button', { name: '履歴書（A4縦）' })).toHaveAttribute('aria-pressed', 'true');
     expect(screen.getByRole('button', { name: '配慮事項シート（A4縦）' })).toHaveAttribute('aria-pressed', 'false');
@@ -380,7 +380,7 @@ describe('App accessibility labels', () => {
 
     expect(screen.getByText('履歴書はA4縦形式で出力します。')).toBeInTheDocument();
     expect(screen.getByText('作業メモはPDFに出力しません。')).toBeInTheDocument();
-    expect(screen.getByText('応募種別が一般応募のため配慮事項シートは出力しません。')).toBeInTheDocument();
+    expect(screen.getByText('追加書類が無効のため、配慮事項シートは出力しません。')).toBeInTheDocument();
     expect(screen.queryByText('配慮事項シートはA4縦形式で出力します。')).not.toBeInTheDocument();
     expect(screen.getByText('右側のPDFプレビューで内容を確認し、PDFを表示・保存してください。')).toBeInTheDocument();
     expect(screen.getAllByRole('button', { name: '履歴書PDFを表示' })).toHaveLength(1);
@@ -393,7 +393,7 @@ describe('App accessibility labels', () => {
       '履歴書PDFを保存',
     ]);
 
-    fireEvent.click(screen.getByRole('radio', { name: '障害者雇用応募' }));
+    fireEvent.click(screen.getByRole('checkbox', { name: '配慮事項シートを作成する' }));
 
     expect(screen.getByText('配慮事項シートはA4縦形式で出力します。')).toBeInTheDocument();
     expect(screen.getByText(/配慮事項シートの出力項目: \d+件/)).toBeInTheDocument();
@@ -443,12 +443,12 @@ describe('App accessibility labels', () => {
     expect(a3).toBeChecked();
     expect(screen.getByText('履歴書はA3横形式で出力します。')).toBeInTheDocument();
     expect(screen.getByText('A3横は履歴書を1枚にまとめる形式です。')).toBeInTheDocument();
-    expect(screen.getByText('履歴書だけをA3横1枚で出力します。障害者雇用応募の配慮事項シートはA4縦の別紙です。')).toBeInTheDocument();
+    expect(screen.getByText('履歴書をA3横1枚で出力します。配慮事項シートを有効にした場合はA4縦の別紙です。')).toBeInTheDocument();
     expect(container.querySelector('.preview-panel .resume-a3-document')).toBeInTheDocument();
     expect(container.querySelector('.preview-panel .resume-a3-page')).toBeInTheDocument();
     expect(container.querySelector('.pdf-export-root .resume-a3-page')).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('radio', { name: '障害者雇用応募' }));
+    fireEvent.click(screen.getByRole('checkbox', { name: '配慮事項シートを作成する' }));
 
     expect(screen.getByRole('button', { name: '履歴書（A3横）' })).toHaveAttribute('aria-pressed', 'true');
     expect(screen.getByRole('button', { name: '配慮事項シート（A4縦）' })).toHaveAttribute('aria-pressed', 'false');
@@ -458,13 +458,13 @@ describe('App accessibility labels', () => {
   it('fills a disability-employment A3 demo for print checking', () => {
     const { container } = render(<App />);
 
-    fireEvent.click(screen.getByRole('button', { name: 'A3横・障害者雇用デモを入力' }));
+    fireEvent.click(screen.getByRole('button', { name: 'A3横・配慮事項付きデモを入力' }));
 
     expect(screen.getByLabelText('氏名')).toHaveValue('佐藤 花子');
     expect(screen.getByLabelText('ふりがな')).toHaveValue('さとう はなこ');
-    expect(screen.getByRole('radio', { name: '障害者雇用応募' })).toBeChecked();
+    expect(screen.getByRole('checkbox', { name: '配慮事項シートを作成する' })).toBeChecked();
     expect(screen.getByRole('radio', { name: 'A3横（1枚）' })).toBeChecked();
-    expect(screen.getByText('A3横・障害者雇用デモを入力しました。右側のPDFプレビューで確認できます。')).toBeInTheDocument();
+    expect(screen.getByText('A3横・配慮事項付きデモを入力しました。右側のPDFプレビューで確認できます。')).toBeInTheDocument();
     expect((screen.getByLabelText('志望動機') as HTMLTextAreaElement).value).toHaveLength(350);
     expect((screen.getByLabelText('自己PR') as HTMLTextAreaElement).value).toHaveLength(350);
     expect(screen.getByLabelText('学歴・職歴18行目の内容')).toHaveValue('以上');
@@ -491,14 +491,14 @@ describe('App accessibility labels', () => {
     expect(screen.getByRole('heading', { name: '入力データ保存' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '入力データを保存' })).toBeInTheDocument();
     expect(screen.getByText('入力データを読込')).toBeInTheDocument();
-    expect(screen.getByText('一般応募では、配慮事項シートの入力内容は入力データに含めません。')).toBeInTheDocument();
+    expect(screen.getByText('追加書類が無効の場合、配慮事項の入力内容はJSONファイルに含めません。')).toBeInTheDocument();
     expect(screen.getByText('既定では写真を入力データに含めません。')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: '保存ファイルを作成' })).not.toBeInTheDocument();
     expect(screen.queryByText('保存ファイルを読込')).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('radio', { name: '障害者雇用応募' }));
+    fireEvent.click(screen.getByRole('checkbox', { name: '配慮事項シートを作成する' }));
 
-    expect(screen.getByText('障害者雇用応募では、配慮事項シートの入力内容も入力データに含まれます。')).toBeInTheDocument();
+    expect(screen.getByText('配慮事項シートを有効にしているため、その入力内容もJSONファイルに含まれます。')).toBeInTheDocument();
   });
 
   it('does not show temporary sample input controls in the output area', () => {
@@ -507,7 +507,7 @@ describe('App accessibility labels', () => {
     expect(screen.queryByRole('heading', { name: 'サンプル入力' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: '一般応募サンプルを入力' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: '職歴多めサンプルを入力' })).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'A3横・障害者雇用デモを入力' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'A3横・配慮事項付きデモを入力' })).toBeInTheDocument();
   });
 
   it('disambiguates repeated editable row controls', () => {

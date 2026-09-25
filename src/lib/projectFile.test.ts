@@ -58,7 +58,7 @@ describe('project file serialization', () => {
 
   it('round-trips a supported input data file', () => {
     const state = createDefaultState();
-    state.resume.applicationType = 'disability';
+    state.resume.enabledSupplements = ['accommodation'];
     state.resume.basic.name = '山田 太郎';
     state.resume.basic.age = '27歳';
     state.resume.pdfFontFamily = 'mincho';
@@ -205,15 +205,31 @@ describe('project file serialization', () => {
     expect(parsed.accommodation.strengths).toBe('');
   });
 
-  it('strips accommodation data unless disability application metadata includes it', () => {
+  it('strips accommodation data unless the supplement is enabled', () => {
     const project = JSON.parse(serializeProjectFile(createDefaultState(), false));
     project.includeAccommodation = true;
     project.state.accommodation.strengths = '一般応募へ混入させない配慮事項';
 
     const parsed = parseProjectFile(JSON.stringify(project));
 
-    expect(parsed.resume.applicationType).toBe('general');
+    expect(parsed.resume.enabledSupplements).toEqual([]);
     expect(parsed.accommodation.strengths).toBe('');
+  });
+
+  it('migrates schema version 1 application metadata', () => {
+    const project = JSON.parse(serializeProjectFile(createDefaultState(), false));
+    project.schemaVersion = 1;
+    project.app = 'Rirekisho Builder';
+    project.state.resume.applicationType = 'disability';
+    delete project.state.resume.enabledSupplements;
+    delete project.documentId;
+    delete project.documentName;
+    project.includeAccommodation = true;
+    project.state.accommodation.strengths = '移行対象';
+
+    const parsed = parseProjectFile(JSON.stringify(project));
+    expect(parsed.resume.enabledSupplements).toEqual(['accommodation']);
+    expect(parsed.accommodation.strengths).toBe('移行対象');
   });
 
   it('rejects non-boolean inclusion metadata', () => {

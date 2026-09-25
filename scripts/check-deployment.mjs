@@ -20,13 +20,14 @@ async function collectHtml(relativeDirectory) {
   return files;
 }
 
-const [sourceHtaccess, builtHtaccess] = await Promise.all([
-  read(path.join('public', '.htaccess')),
-  read(path.join('dist', '.htaccess')),
+const [sourceHeaders, builtHeaders, wrangler] = await Promise.all([
+  read(path.join('public', '_headers')),
+  read(path.join('dist', '_headers')),
+  read('wrangler.jsonc'),
 ]);
 
-if (sourceHtaccess.replace(/\r\n/g, '\n') !== builtHtaccess.replace(/\r\n/g, '\n')) {
-  failures.push('dist/.htaccess differs from public/.htaccess');
+if (sourceHeaders.replace(/\r\n/g, '\n') !== builtHeaders.replace(/\r\n/g, '\n')) {
+  failures.push('dist/_headers differs from public/_headers');
 }
 
 for (const directive of [
@@ -37,8 +38,11 @@ for (const directive of [
   "frame-ancestors 'none'",
   "form-action 'self'",
 ]) {
-  if (!sourceHtaccess.includes(directive)) failures.push(`CSP is missing: ${directive}`);
+  if (!sourceHeaders.includes(directive)) failures.push(`CSP is missing: ${directive}`);
 }
+if (!wrangler.includes('"not_found_handling": "single-page-application"')) failures.push('Wrangler SPA fallback is missing');
+if (!wrangler.includes('resume.nuconeko-garden.com')) failures.push('Wrangler custom domain is missing');
+if (!(await read(path.join('dist', 'sitemap.xml'))).includes('https://resume.nuconeko-garden.com/')) failures.push('canonical sitemap is missing');
 
 for (const htmlPath of await collectHtml('dist')) {
   const html = await read(htmlPath);

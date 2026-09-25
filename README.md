@@ -1,62 +1,35 @@
-# Rirekisho Builder
+# Rirekisho Studio
 
-就労移行支援事業所で、利用者本人が履歴書を作成するためのブラウザベースWebアプリです。
+日本向けの履歴書をブラウザ内で作成し、A4・A3のPDFとして保存できるReactアプリです。
 
-- リポジトリ: https://github.com/NucoNekoSan/Rirekisho-builderApp
+- 公開予定URL: https://resume.nuconeko-garden.com/
+- Works: https://nuconeko-garden.com/works/
+- Repository: https://github.com/NucoNekoSan/Rirekisho-builderApp
 
 ## Features
 
-- A4・A3履歴書PDFの表示・ダウンロード
-- 一般応募 / 障害者雇用応募の応募種別
-- 障害者雇用応募向けA4配慮事項シート
-- JPG/JPEG履歴書写真の取り込み、切り抜き、回転、削除
-- 年齢欄、日付表示形式、文字揃え設定
-- JSON保存・読込
-- サーバー保存なし、ブラウザストレージへの個人情報保存なし
+- A4縦2ページ・A3横1枚の履歴書PDF
+- JPG/JPEG証明写真の切り抜き、回転、削除
+- 西暦・和暦、明朝・ゴシック、項目別文字揃え
+- 必要な場合だけ有効化できる配慮事項シート
+- 明示的な同意後にだけ利用するIndexedDB端末保存
+- 用途別の複数履歴書、複製、名前変更、削除
+- schema v2 JSON書き出し・読込とschema v1互換読込
+- PWA、キーボード操作、オフラインマニュアル
 
-## 技術スタック
+## Privacy Boundary
 
-| 技術 | 説明 |
-|------|------|
-| **React** | 画面を構成するUIライブラリ（入力フォームやプレビュー表示を担当） |
-| **TypeScript** | JavaScriptに型チェックを追加した言語（入力ミスを防ぐ） |
-| **Vite** | 開発サーバーとビルドツール（コードをブラウザで動くファイルに変換） |
-| **Vitest** | テスト実行ツール（コードが正しく動くか自動チェック） |
-| **jsPDF / html2canvas** | PDF生成ライブラリ（画面をPDFファイルに変換） |
+履歴書本文、氏名、住所、電話番号、写真、配慮事項はCloudflareや運営者のサーバーへ送信しません。端末保存は利用者が有効化した場合だけIndexedDBへ行います。localStorageには保存同意のような個人情報ではない設定だけを保存します。
 
-## ファイル構成
+外部通信は、住所検索時に正規化済みの7桁郵便番号をzipcloudへ送る場合だけです。JSONファイルは平文なので、利用者自身が安全な場所で管理する必要があります。
 
-```
-rirekisho-builder/
-├── public/               ← ビルド時にそのままコピーされるファイル
-│   ├── .htaccess         ← Xサーバー用の設定（SPA対応・セキュリティヘッダー）
-│   ├── favicon.svg       ← ブラウザタブのアイコン
-│   └── manual/           ← 利用者向けマニュアル（HTML）
-├── src/                  ← アプリのソースコード
-│   ├── App.tsx           ← メイン画面（入力フォーム・プレビュー・PDF出力）
-│   ├── App.css           ← 画面デザインとPDF印刷レイアウト
-│   ├── components/       ← 画面の部品
-│   │   ├── PdfPages.tsx  ← PDF出力用のページレイアウト（A4・A3・配慮事項）
-│   │   ├── PreviewPanel.tsx ← プレビュー表示パネル
-│   │   └── OutputPanel.tsx  ← PDF出力パネル
-│   ├── lib/              ← ロジック・ユーティリティ
-│   │   ├── defaults.ts   ← サンプルデータ定義
-│   │   ├── projectFile.ts ← JSON保存・読込のバリデーション
-│   │   ├── types.ts      ← データの型定義
-│   │   ├── dateFormat.ts ← 日付フォーマット処理
-│   │   ├── inputFormat.ts ← 電話番号・郵便番号のフォーマット
-│   │   └── validation.ts ← 入力値の検証
-│   ├── browser/          ← ブラウザ固有の処理
-│   │   ├── pdfRenderer.ts ← PDF生成処理
-│   │   ├── photoLoader.ts ← 写真読み込み
-│   │   └── downloadFile.ts ← ファイルダウンロード
-│   └── hooks/            ← React専用のロジック
-│       └── usePostalLookup.ts ← 郵便番号検索
-├── dist/                 ← ビルド結果（これをXサーバーにアップロード）
-├── package.json          ← 依存パッケージとスクリプト定義
-├── vite.config.ts        ← ビルド設定
-└── MAINTENANCE.md        ← 運用・保守マニュアル（職員向け）
-```
+## Stack
+
+- React 19 / TypeScript / Vite / React Router
+- IndexedDB
+- html2canvas / jsPDF
+- Vitest / Testing Library / Playwright
+- Cloudflare Workers Static Assets / Workers Builds
 
 ## Development
 
@@ -66,35 +39,18 @@ npx playwright install chromium
 npm run dev
 ```
 
-## Verification
-
 ```powershell
 npm run check
 ```
 
-ローカル脆弱性診断と依存関係監査は次のコマンドで実行します。
+## Deployment
+
+`wrangler.jsonc`は`dist`をSPAとして配信し、`resume.nuconeko-garden.com`をカスタムドメインに設定します。
 
 ```powershell
-npm run test:security
-npm run security:sca
+npm run deploy
 ```
 
-## Xserver Deployment
+Workers Buildsではproduction branchを`main`、build commandを`npm run build`、deploy commandを`npx wrangler deploy`に設定します。初回のCloudflare・GitHub認証と権限承認はアカウント所有者が行います。
 
-```powershell
-npm run build
-```
-
-`dist/` の中身をXserverの公開ディレクトリへアップロードします。`public/.htaccess` はビルド時に `dist/.htaccess` としてコピーされ、同じディレクトリの `index.html` へ戻すSPA fallbackと基本的な安全ヘッダーを提供します。
-
-サブディレクトリ名をビルド時に固定したい場合は、例として次のように指定できます。
-
-```powershell
-$env:VITE_BASE_PATH="/rirekisho/"; npm run build
-```
-
-詳しい手順は [MAINTENANCE.md](MAINTENANCE.md) を参照してください。
-
-## Privacy Boundary
-
-履歴書本文、氏名、電話番号、写真、障害・配慮事項はサーバーへ送信しません。住所検索時だけ、正規化済みの7桁郵便番号をzipcloudへ送信します。保存が必要な場合は、利用者本人がJSONファイルとして明示的にダウンロードします。写真は既定ではJSONに含めません。一般応募の入力データには配慮事項シートの内容を含めず、障害者雇用応募のときだけ配慮事項を含めます。
+既存Worksサイトへの掲載は公開後にWagtail CMSから行い、利用URLとして `https://resume.nuconeko-garden.com/` を登録します。

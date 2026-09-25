@@ -1,7 +1,7 @@
 // アプリ全体で共有する型定義（データ構造・設定値の型）
 
-/** 応募種別: 一般応募 / 障害者雇用応募 */
-type ApplicationType = 'general' | 'disability';
+/** 任意で追加できる応募書類 */
+export type ResumeSupplement = 'accommodation';
 /** 入力モード（現在は standard のみ。将来の拡張用） */
 type InputMode = 'standard';
 /** PDF日付表示: 西暦 / 和暦 */
@@ -62,7 +62,8 @@ export interface PhotoData {
 
 /** 履歴書データ全体（基本情報＋学歴職歴＋志望動機＋写真＋設定） */
 export interface ResumeData {
-  applicationType: ApplicationType;
+  /** 必要な利用者だけが有効化する追加書類 */
+  enabledSupplements: ResumeSupplement[];
   inputMode: InputMode;
   eraMode: EraMode;
   pdfFontFamily: PdfFontFamily;
@@ -85,7 +86,7 @@ export interface ResumeData {
   textAlignments: TextAlignmentMap;
 }
 
-/** 配慮事項シートデータ（障害者雇用応募時のみ使用） */
+/** 配慮事項シートデータ（追加書類を有効にした場合のみ使用） */
 export interface AccommodationData {
   /** 以下の include* フラグがONの項目だけPDFに出力される */
   includeDisabilityName: boolean;
@@ -118,7 +119,35 @@ export interface ProjectFile {
   schemaVersion: number;
   exportedAt: string;
   app: string;
+  documentId: string;
+  documentName: string;
   includePhoto: boolean;
   includeAccommodation: boolean;
   state: AppState;
+}
+
+export interface ResumeDocumentMetadata {
+  id: string;
+  name: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface StoredResumeDocument extends ResumeDocumentMetadata {
+  state: AppState;
+}
+
+export type LocalStorageConsent = 'memory-only' | 'device-storage';
+
+export type RepositoryResult<T> =
+  | { ok: true; value: T }
+  | { ok: false; error: string };
+
+export interface ResumeRepository {
+  list(): Promise<RepositoryResult<ResumeDocumentMetadata[]>>;
+  get(id: string): Promise<RepositoryResult<StoredResumeDocument | null>>;
+  save(document: StoredResumeDocument): Promise<RepositoryResult<StoredResumeDocument>>;
+  duplicate(id: string): Promise<RepositoryResult<StoredResumeDocument>>;
+  delete(id: string): Promise<RepositoryResult<void>>;
+  clear(): Promise<RepositoryResult<void>>;
 }

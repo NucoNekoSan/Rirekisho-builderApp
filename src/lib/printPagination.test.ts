@@ -105,11 +105,11 @@ describe('buildResumePrintPages', () => {
     expect(pages[1].sections.some((section) => section.type === 'text' && section.kind === 'selfPr')).toBe(true);
   });
 
-  it('障害者雇用デモの350文字欄をA4縦2ページに収める', () => {
+  it('配慮事項付きデモの350文字欄をA4縦2ページに収める', () => {
     const { resume, accommodation } = createDisabilityEmploymentDemoState();
     const pages = buildResumePrintPages(resume);
 
-    expect(resume.applicationType).toBe('disability');
+    expect(resume.enabledSupplements).toContain('accommodation');
     expect(resume.histories).toHaveLength(18);
     expect(resume.motivation).toHaveLength(350);
     expect(resume.selfPr).toHaveLength(350);

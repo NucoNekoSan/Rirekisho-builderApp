@@ -31,7 +31,7 @@ export const getResumeSectionStatus = (
     case 'appeal':
       return hasAllText(resume.motivation, resume.selfPr, resume.requests) ? '入力済み' : '未入力あり';
     case 'accommodation':
-      if (resume.applicationType !== 'disability') return '対象外';
+      if (!resume.enabledSupplements.includes('accommodation')) return '対象外';
       return hasAccommodationOutput ? '入力済み' : '未入力あり';
     case 'output':
       return '確認';

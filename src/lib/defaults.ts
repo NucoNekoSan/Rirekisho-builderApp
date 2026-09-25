@@ -6,7 +6,7 @@ const now = () => new Date().toISOString();
 
 /** 空の履歴書データを生成（アプリ初期表示時に使用） */
 export const createDefaultResume = (): ResumeData => ({
-  applicationType: 'general',
+  enabledSupplements: [],
   inputMode: 'standard',
   eraMode: 'western',
   pdfFontFamily: 'mincho',
@@ -71,13 +71,13 @@ export const createDefaultState = (): AppState => ({
   accommodation: createDefaultAccommodation(),
 });
 
-/** 一般応募のサンプルデータを生成（動作確認用。架空の山田太郎） */
+/** 標準履歴書のサンプルデータを生成（動作確認用。架空の山田太郎） */
 export const createGeneralDemoState = (): AppState => {
   const resume = createDefaultResume();
   return {
     resume: {
       ...resume,
-      applicationType: 'general',
+      enabledSupplements: [],
       inputMode: 'standard',
       eraMode: 'western',
       basic: {
@@ -99,7 +99,7 @@ export const createGeneralDemoState = (): AppState => {
         { id: id(), year: '2021', month: '3', text: '東京都立青葉高等学校 普通科 卒業' },
         { id: id(), year: '2021', month: '4', text: '株式会社サンプル 入社' },
         { id: id(), year: '2024', month: '9', text: '一身上の都合により退職' },
-        { id: id(), year: '2024', month: '10', text: '就労移行支援事業所にて就職準備開始' },
+        { id: id(), year: '2024', month: '10', text: '職業訓練校にて就職準備開始' },
         { id: id(), year: '', month: '', text: '以上' },
       ],
       qualifications: [
@@ -123,14 +123,14 @@ export const createGeneralDemoState = (): AppState => {
   };
 };
 
-/** 障害者雇用応募のサンプルデータを生成（350文字上限と配慮事項の動作確認用。架空の佐藤花子） */
+/** 配慮事項付きのサンプルデータを生成（350文字上限の動作確認用。架空の佐藤花子） */
 export const createDisabilityEmploymentDemoState = (): AppState => {
   const state = createGeneralDemoState();
   return {
     ...state,
     resume: {
       ...state.resume,
-      applicationType: 'disability',
+      enabledSupplements: ['accommodation'],
       basic: {
         ...state.resume.basic,
         name: '佐藤 花子',
@@ -157,10 +157,10 @@ export const createDisabilityEmploymentDemoState = (): AppState => {
         { id: id(), year: '2019', month: '8', text: '契約期間満了により退職' },
         { id: id(), year: '2019', month: '9', text: '青山サポート株式会社 入社 書類整理・スキャン業務を担当' },
         { id: id(), year: '2021', month: '3', text: '体調調整のため退職' },
-        { id: id(), year: '2022', month: '4', text: '就労移行支援事業所にて就職準備開始' },
+        { id: id(), year: '2022', month: '4', text: '職業訓練校にて就職準備開始' },
         { id: id(), year: '2023', month: '1', text: '株式会社ひかり事務センター 入社 障害者雇用で請求書確認を担当' },
         { id: id(), year: '2025', month: '12', text: '契約期間満了により退職' },
-        { id: id(), year: '2026', month: '1', text: '就労移行支援事業所にて再就職準備開始' },
+        { id: id(), year: '2026', month: '1', text: '再就職に向けた職業訓練を開始' },
         { id: id(), year: '', month: '', text: '以上' },
       ],
       qualifications: [
@@ -170,11 +170,11 @@ export const createDisabilityEmploymentDemoState = (): AppState => {
       ],
       commuteTime: '約50分',
       motivation:
-        '私はこれまで、データ入力、伝票整理、請求書確認、書類のスキャンなど、正確さが求められる事務補助業務に携わってきました。就労移行支援では、集計や文書作成を学び、作業手順を確認してから着手する習慣を身につけました。貴社が強みを生かして長く働ける職場づくりを進めている点に魅力を感じ、志望いたしました。私は、決められた手順を守り、丁寧かつ正確に処理することを得意としています。業務の優先順位や期限を確認できれば、計画を立て、安定した品質で取り組めます。月一回の通院調整と、指示をメモでも確認できる配慮をお願いしていますが、体調管理や早めの相談は自ら行います。入社後は担当業務を確実に覚え、分からない点を確認します。報告、連絡、相談を重ね、任せて安心と思っていただける存在として長く貢献したいと考えています。',
+        '私はこれまで、データ入力、伝票整理、請求書確認、書類のスキャンなど、正確さが求められる事務補助業務に携わってきました。実践職業訓練では、集計や文書作成を学び、作業手順を確認してから着手する習慣を身につけました。貴社が強みを生かして長く働ける職場づくりを進めている点に魅力を感じ、志望いたしました。私は、決められた手順を守り、丁寧かつ正確に処理することを得意としています。業務の優先順位や期限を確認できれば、計画を立て、安定した品質で取り組めます。月一回の通院調整と、指示をメモでも確認できる配慮をお願いしていますが、体調管理や早めの相談は自ら行います。入社後は担当業務を確実に覚え、分からない点を確認します。報告、連絡、相談を重ね、任せて安心と思っていただける存在として長く貢献したいと考えています。',
       selfPr:
-        '私の強みは、手順に沿って正確に作業を続ける力と、確認した内容を記録して次の業務に生かす力です。データ入力後に元資料との照合を行い、書類を一覧で管理することで、入力漏れや重複を防いできました。請求書確認では、不明点を整理して担当者へ質問し、回答を手順書へ追記することで、確認を繰り返さないようにしました。就労移行支援では、体調と予定を確認し、作業を分けて優先順位を付ける練習を続けています。集中が落ち始めたときは休憩と深呼吸を取り、相談することで、訓練に参加できています。急な変更や口頭指示が重なる際は整理に時間が必要ですが、メモやチャットで要点を確認できれば対応できます。業務でも見本と手順を確認し、覚えた作業を正確に積み重ねます。報告を忘れず、工夫を続けながら、チームの一員として役割を果たします。',
+        '私の強みは、手順に沿って正確に作業を続ける力と、確認した内容を記録して次の業務に生かす力です。データ入力後に元資料との照合を行い、書類を一覧で管理することで、入力漏れや重複を防いできました。請求書確認では、不明点を整理して担当者へ質問し、回答を手順書へ追記することで、確認を繰り返さないようにしました。実践職業訓練では、体調と予定を確認し、作業を分けて優先順位を付ける練習を続けています。集中が落ち始めたときは休憩と深呼吸を取り、相談することで、訓練に参加できています。急な変更や口頭指示が重なる際は整理に時間が必要ですが、メモやチャットで要点を確認できれば対応できます。業務でも見本と手順を確認し、覚えた作業を正確に積み重ねます。報告を忘れず、工夫を続けながら、チームの一員として役割を果たします。',
       requests: '月1回の通院日の勤務調整を希望します。その他は貴社規定に従います。',
-      memo: 'これは障害者雇用応募と350文字上限の確認用架空サンプルです。PDFには出力されません。',
+      memo: 'これは配慮事項と350文字上限の確認用架空サンプルです。PDFには出力されません。',
     },
     accommodation: {
       includeDisabilityName: true,
@@ -186,7 +186,7 @@ export const createDisabilityEmploymentDemoState = (): AppState => {
       includeMedication: true,
       medication: '主治医の指示どおり服薬しており、現在の体調は安定しています。',
       includeSupportContact: true,
-      supportContact: '就労移行支援事業所ひなた 中野センター（担当：田中）',
+      supportContact: '地域就労相談センター（担当：田中）',
       strengths: '手順が明確な作業を正確に継続し、確認結果を記録して次の業務に生かせます。',
       difficultSituations: '急な予定変更や、複数の口頭指示が同時に重なると、情報の整理に時間が必要です。',
       requestedAccommodations: '指示や変更点をメモ・チャットでも確認できることと、月1回の通院日の勤務調整をお願いします。',

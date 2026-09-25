@@ -1,6 +1,7 @@
 // アプリ共通定数: 写真仕様・JPEG品質・プロジェクトファイルバージョン等の設定値を集約
-export const APP_NAME = 'Rirekisho Builder';
-export const PROJECT_SCHEMA_VERSION = 1;
+export const APP_NAME = 'Rirekisho Studio';
+export const PROJECT_SCHEMA_VERSION = 2;
+export const CANONICAL_URL = 'https://resume.nuconeko-garden.com/';
 export const BYTES_PER_MB = 1024 * 1024;
 export const POSTAL_CODE_DIGITS = 7;
 /** 志望動機・自己PRの入力上限 */

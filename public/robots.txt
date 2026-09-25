@@ -1,2 +1,4 @@
 User-agent: *
-Disallow: /
+Allow: /
+
+Sitemap: https://resume.nuconeko-garden.com/sitemap.xml
