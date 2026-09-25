@@ -2,6 +2,8 @@
 
 就労移行支援事業所で、利用者本人が履歴書を作成するためのブラウザベースWebアプリです。
 
+- リポジトリ: https://github.com/NucoNekoSan/Rirekisho-builderApp
+
 ## Features
 
 - A4・A3履歴書PDFの表示・ダウンロード
