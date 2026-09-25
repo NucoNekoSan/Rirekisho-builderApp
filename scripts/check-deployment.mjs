@@ -80,6 +80,17 @@ for (const name of manualFiles) {
   }
 }
 
+const manualIndex = await read(path.join('dist', 'manual', 'INDEX.md'));
+const todayInJapan = new Intl.DateTimeFormat('ja-JP', {
+  timeZone: 'Asia/Tokyo',
+  year: 'numeric',
+  month: 'long',
+  day: 'numeric',
+}).format(new Date());
+if (!manualIndex.includes(`最新版の作成日：${todayInJapan}`)) {
+  failures.push('manual release date was not stamped with the current Japan date');
+}
+
 if (failures.length > 0) {
   console.error('Deployment consistency check failed:');
   for (const failure of failures.sort()) console.error(`- ${failure}`);
