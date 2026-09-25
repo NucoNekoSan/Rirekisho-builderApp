@@ -3,8 +3,8 @@ import { expect, test } from '@playwright/test';
 test('desktop and mobile layouts do not overflow horizontally', async ({ page }, testInfo) => {
   for (const width of [1600, 1440, 820]) {
     await page.setViewportSize({ width, height: 1000 });
-    await page.goto('/');
-    await expect(page.getByRole('heading', { name: '履歴書作成ツール' })).toBeVisible();
+    await page.goto('/app');
+    await expect(page.getByRole('heading', { name: 'Rirekisho Studio' })).toBeVisible();
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
   }
 
@@ -20,7 +20,7 @@ test('desktop and mobile layouts do not overflow horizontally', async ({ page },
 
 test('workspace switches between two and three columns at 1680px', async ({ page }) => {
   await page.setViewportSize({ width: 1680, height: 1000 });
-  await page.goto('/');
+  await page.goto('/app');
 
   const editor = page.locator('.editor');
   const preview = page.locator('.preview-panel');
@@ -39,8 +39,8 @@ test('workspace switches between two and three columns at 1680px', async ({ page
 });
 
 test('A4 and A3 previews preserve their scoped header backgrounds', async ({ page }) => {
-  await page.goto('/');
-  await page.getByRole('button', { name: 'A3横・障害者雇用デモを入力' }).click();
+  await page.goto('/app');
+  await page.getByRole('button', { name: 'A3横・配慮事項付きデモを入力' }).click();
   const a3Page = page.locator('.preview-panel .resume-a3-page').first();
   await expect(a3Page).toBeVisible();
   await expect(a3Page).toHaveCSS('--resume-header-bg', 'transparent');
@@ -52,7 +52,7 @@ test('A4 and A3 previews preserve their scoped header backgrounds', async ({ pag
 });
 
 test('IME confirmation keeps focus and input in the current field', async ({ page }) => {
-  await page.goto('/');
+  await page.goto('/app');
   const name = page.getByRole('textbox', { name: '氏名', exact: true });
   const furigana = page.getByRole('textbox', { name: 'ふりがな', exact: true });
 
@@ -86,7 +86,7 @@ test('IME confirmation keeps focus and input in the current field', async ({ pag
 });
 
 test('PDF display opens a tab before asynchronous generation completes', async ({ page }) => {
-  await page.goto('/');
+  await page.goto('/app');
   const popupPromise = page.waitForEvent('popup');
   await page.getByRole('button', { name: '履歴書PDFを表示' }).click();
   const popup = await popupPromise;
@@ -97,7 +97,7 @@ test('PDF display opens a tab before asynchronous generation completes', async (
 });
 
 test('A4 output is blocked before fixed pages can clip overflowing content', async ({ page }) => {
-  await page.goto('/');
+  await page.goto('/app');
   await page.getByRole('textbox', { name: '志望動機', exact: true }).fill('応\n'.repeat(150));
 
   await expect(page.getByRole('alert')).toContainText('A4縦2ページに収まらないため、PDFを表示・保存できません');
@@ -106,7 +106,7 @@ test('A4 output is blocked before fixed pages can clip overflowing content', asy
 });
 
 test('motivation, self PR, and requests share their available PDF height on A4 and A3', async ({ page }) => {
-  await page.goto('/');
+  await page.goto('/app');
   await page.getByRole('textbox', { name: '志望動機', exact: true }).fill('短い志望動機です。');
   await page.getByRole('textbox', { name: '自己PR', exact: true }).fill('自'.repeat(350));
 
@@ -195,7 +195,7 @@ test('motivation, self PR, and requests share their available PDF height on A4 a
 });
 
 test('input data survives a browser download, clear, and reload round trip', async ({ page }) => {
-  await page.goto('/');
+  await page.goto('/app');
   await page.getByRole('textbox', { name: '氏名', exact: true }).fill('保存確認 太郎');
   await page.getByRole('textbox', { name: '志望動機', exact: true }).fill('保存と読込のブラウザ確認');
 

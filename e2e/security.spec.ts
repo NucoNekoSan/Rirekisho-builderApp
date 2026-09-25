@@ -65,7 +65,7 @@ test('resume input remains inert in the DOM and generated PDF flow', async ({ pa
       });
     });
   });
-  await page.goto('/');
+  await page.goto('/app');
   await page.getByRole('textbox', { name: '氏名', exact: true }).fill(XSS_PAYLOAD);
   await page.getByRole('textbox', { name: '志望動機', exact: true }).fill(`応募理由 ${XSS_PAYLOAD}`);
   await page.getByRole('textbox', { name: '学歴・職歴1行目の内容' }).fill(XSS_PAYLOAD);
@@ -121,7 +121,7 @@ test('PII is not persisted or sent outside the documented postal-code request', 
     }),
   }));
 
-  await page.goto('/');
+  await page.goto('/app');
   const pii = 'SECURITY-PII-20260716';
   await page.getByRole('textbox', { name: '氏名', exact: true }).fill(pii);
   await page.getByRole('textbox', { name: '電話番号', exact: true }).fill('09011112222');
@@ -164,7 +164,7 @@ test('PII is not persisted or sent outside the documented postal-code request', 
 });
 
 test('malicious project files are rejected or normalized without prototype pollution', async ({ page }) => {
-  await page.goto('/');
+  await page.goto('/app');
   const downloadPromise = page.waitForEvent('download');
   await page.getByRole('button', { name: '入力データを保存' }).click();
   const download = await downloadPromise;

@@ -2,12 +2,12 @@
 
 ## 重要な回帰テスト領域
 
-- 一般応募の履歴書PDFに配慮事項の情報が含まれないこと。
+- 追加書類を無効にした履歴書PDFに配慮事項の情報が含まれないこと。
 - 配慮事項シートが項目別ON/OFFを正しく反映すること。
 - 写真アップロード設定が単一の設定値を参照すること。
 - 写真のMIME、拡張子、容量、JPEG実データがアップロードとJSON読込で同じ受入条件に従うこと。
 - 写真がデフォルトでJSON保存から除外されること。
-- 一般応募のJSON保存に配慮事項データが含まれないこと。
+- 追加書類を無効にしたJSON保存に配慮事項データが含まれないこと。
 - 個人情報にブラウザストレージが使用されないこと。
 - 静的デプロイ後もPDF生成が動作すること。
 - セクション完了状態が必須入力ルールと一致すること。
@@ -35,7 +35,8 @@
 - `inputFormat.test.ts`: 電話番号・郵便番号の入力整形
 - `postalCode.test.ts`: 郵便番号の正規化と住所検索応答
 - `printPagination.test.ts`: 履歴書/配慮事項ページのA4セマンティックページネーション
-- `projectFile.test.ts`: JSON保存/読込、写真除外、一般応募の配慮事項除外
+- `projectFile.test.ts`: JSON保存/読込、schema v1移行、写真除外、無効な配慮事項除外
+- `resumeRepository.test.ts`: IndexedDBの保存、一覧、複製、削除
 - `sectionStatus.test.ts`: セクション完了状態のルール
 - `storageBoundary.test.ts`: ブラウザストレージ境界
 - `textNormalize.test.ts`: PDF向けテキスト正規化
@@ -46,7 +47,7 @@
 
 - `typecheck:test`: 本番コードとテストコードをTypeScript strictで検査する。
 - `test:coverage`: lines/statements/functions 70%以上、branches 60%以上を必須とする。
-- `check:deploy`: `.htaccess`、CSP互換HTML、マニュアル配備、Service Workerプリキャッシュを検査する。
+- `check:deploy`: `_headers`、Wrangler SPA fallback、カスタムドメイン、CSP互換HTML、マニュアル配備、Service Workerプリキャッシュを検査する。
 - `check:security`: 秘密情報らしい値、危険API、CSP、source map、開発ファイルの配備混入を検査する。
 - `test:security`: 本番成果物に対する静的検査とChromiumセキュリティE2Eを実行する。
 - `security:sca`: 開発依存込みと本番依存のみのnpm脆弱性監査を実行する。

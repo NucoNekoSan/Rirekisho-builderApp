@@ -1,6 +1,8 @@
 # 運用・保守マニュアル
 
-このドキュメントは、Rirekisho Builder を引き継ぐ職員（Web担当者）向けの運用・保守ガイドです。
+このドキュメントは、Rirekisho Studioを保守する開発者向けの運用・保守ガイドです。
+
+> 2026-09-25以降の本番環境はCloudflare Workers Static Assetsです。以下に残るXserver手順は旧環境の記録であり、新規配備には使用しません。現在の配備設定は`wrangler.jsonc`、安全ヘッダーは`public/_headers`、操作手順はREADMEを正とします。
 システム全体像の把握から、日常的なUI変更、PDFレイアウト調整、デプロイまでをカバーします。
 
 ---

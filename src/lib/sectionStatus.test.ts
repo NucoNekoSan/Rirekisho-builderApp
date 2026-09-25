@@ -31,12 +31,12 @@ describe('getResumeSectionStatus', () => {
     expect(getResumeSectionStatus('history', resume, false)).toBe('入力済み');
   });
 
-  it('marks accommodation as out of scope for general applications', () => {
+  it('marks accommodation as out of scope until the supplement is enabled', () => {
     const resume = createDefaultResume();
 
     expect(getResumeSectionStatus('accommodation', resume, false)).toBe('対象外');
 
-    resume.applicationType = 'disability';
+    resume.enabledSupplements = ['accommodation'];
 
     expect(getResumeSectionStatus('accommodation', resume, false)).toBe('未入力あり');
     expect(getResumeSectionStatus('accommodation', resume, true)).toBe('入力済み');

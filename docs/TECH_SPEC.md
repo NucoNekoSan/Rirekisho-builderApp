@@ -4,15 +4,15 @@
 
 - フロントエンド: React 19 + TypeScript + Vite
 - PDF生成: HTML A4縦/A3横プレビュー → html2canvas → jsPDF
-- データ保存: 明示的なJSONファイルのダウンロード/アップロードのみ
-- デプロイ: Xサーバーへの静的ファイル配置。Node.jsはビルド時のみ使用。
+- データ保存: 明示同意後のIndexedDB、およびJSONファイルのダウンロード/アップロード
+- デプロイ: Cloudflare Workers Static Assets。Node.jsはビルド時のみ使用。
 - 型チェック: TypeScript strict モード。
 
 ## データフロー
 
-1. 利用者がブラウザのメモリ上で履歴書データを入力する。
+1. 利用者がブラウザのメモリ上で履歴書データを入力する。端末保存へ同意した場合だけIndexedDBへ自動保存する。
 2. 任意のJPG/JPEG写真をブラウザのcanvasで処理し、Reactのstateに保持する。
-3. 利用者はJSONプロジェクトファイルとしてエクスポートできる。写真はデフォルトで除外される。配慮事項データは一般応募では除外され、障害者雇用応募の場合のみ含まれる。
+3. 利用者はschema v2 JSONとして単一書類をエクスポートできる。写真はデフォルトで除外され、配慮事項は追加書類が有効な場合だけ含まれる。schema v1は互換読込する。
 4. PDF表示ではクリック処理中に生成中タブを開き、その後にA4縦またはA3横プレビューのDOMをキャプチャしてBlob iframeへ反映する。新しいタブがブロックされた場合、UIがエラーを報告し、利用者はPDFダウンロードを使用できる。
 5. 履歴書本文、写真、障害・配慮事項はサーバーへ送信しない。住所検索時だけ、正規化済みの7桁郵便番号をzipcloudへ送信する。
 
@@ -25,10 +25,11 @@
 - JPEG圧縮品質は `JPEG_QUALITY` の0.92を写真処理とPDF出力で共通参照する。
 - A4縦履歴書は2ページ固定とし、容量見積りが2ページを超えた場合はPDF表示・保存を停止する。
 
-## Xサーバーデプロイ
+## Cloudflare Workersデプロイ
 
 - ビルド: `npm run build`
-- `dist/` の中身を対象の公開ディレクトリにアップロードする。
-- `public/.htaccess` はビルド時に `dist/.htaccess` としてコピーされ、SPAフォールバックを提供する。
+- `npx wrangler deploy`で`dist/`を配備する。
+- `wrangler.jsonc`でSPA fallbackとカスタムドメインを定義する。
+- `public/_headers`でCSPと安全ヘッダーを定義する。
 - 公開マニュアルのJavaScriptはCSPに適合する外部ファイルとして配布し、Markdown全章をPWAにプリキャッシュする。
-- `scripts/serve-dist.mjs` はテスト時だけ `.htaccess` の安全ヘッダーを適用して `dist/` を配信する。
+- `scripts/serve-dist.mjs` はテスト時に `_headers` の安全ヘッダーを適用して `dist/` を配信する。

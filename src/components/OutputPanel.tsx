@@ -59,12 +59,13 @@ export function OutputPanel({
   onClear,
 }: OutputPanelProps) {
   const resumePaperFormat = resume.pdfPaperFormat;
+  const hasAccommodation = resume.enabledSupplements.includes('accommodation');
   return (
     <div className="output-grid">
       <div className="output-card output-card-wide">
         <h3>PDF出力前確認</h3>
         <ul className="check-list">
-          <li>一般応募PDFには配慮事項シートの内容を含めません。</li>
+          <li>配慮事項シートは選択した場合だけ別紙として出力します。</li>
           <li>作業メモはPDFに出力しません。</li>
           <li>{`履歴書は${resumePaperFormatLabel}形式で出力します。`}</li>
           {resumePaperFormat === 'a4-portrait' ? (
@@ -75,7 +76,7 @@ export function OutputPanel({
           {resumeA4PageWarning ? <li className="warning-text">{`現在の入力量はA4縦2ページに収まらないため、PDFを表示・保存できません（容量目安: ${resumeA4PageCount}ページ）。内容を短くするか、A3横を選択してください。`}</li> : null}
           {resumeA3DensityWarning ? <li className="warning-text">A3横1枚では内容が収まりきらない可能性があります。A4縦も比較して確認してください。</li> : null}
           {resumeAppealLengthWarning ? <li className="warning-text">{`${resumeAppealLengthWarning} ${RESUME_APPEAL_MAX_LENGTH}文字以内になるまでPDFを表示・保存できません。`}</li> : null}
-          {resume.applicationType === 'disability' ? (
+          {hasAccommodation ? (
             <>
               <li>配慮事項シートはA4縦形式で出力します。</li>
               <li>{`配慮事項シートの出力項目: ${accommodationFieldCount}件`}</li>
@@ -83,7 +84,7 @@ export function OutputPanel({
               {hasSensitiveAccommodationOutput(accommodation) ? <li className="warning-text">配慮事項シートに機微情報が含まれます。</li> : null}
             </>
           ) : (
-            <li>応募種別が一般応募のため配慮事項シートは出力しません。</li>
+            <li>追加書類が無効のため、配慮事項シートは出力しません。</li>
           )}
         </ul>
         <fieldset className="field choice-field pdf-paper-control">
@@ -103,8 +104,8 @@ export function OutputPanel({
           </div>
           <p className="paper-format-note">
             {resumePaperFormat === 'a3-landscape'
-              ? '履歴書だけをA3横1枚で出力します。障害者雇用応募の配慮事項シートはA4縦の別紙です。'
-              : '履歴書をA4縦で出力します。障害者雇用応募では配慮事項シートをA4縦の別紙で追加します。'}
+              ? '履歴書をA3横1枚で出力します。配慮事項シートを有効にした場合はA4縦の別紙です。'
+              : '履歴書をA4縦で出力します。配慮事項シートを有効にした場合はA4縦の別紙を追加できます。'}
           </p>
         </fieldset>
         <fieldset className="field choice-field pdf-font-control">
@@ -124,10 +125,10 @@ export function OutputPanel({
           </div>
         </fieldset>
         <div className="demo-check-action">
-          <p>確認用デモとして、障害者雇用応募の履歴書と配慮事項を入力できます。</p>
+          <p>確認用デモとして、履歴書と配慮事項シートを入力できます。</p>
           <div className="demo-check-buttons">
-            <button type="button" className="secondary" onClick={() => applyDisabilityEmploymentDemo('a4-portrait')}>A4縦・障害者雇用デモを入力</button>
-            <button type="button" className="secondary" onClick={() => applyDisabilityEmploymentDemo('a3-landscape')}>A3横・障害者雇用デモを入力</button>
+            <button type="button" className="secondary" onClick={() => applyDisabilityEmploymentDemo('a4-portrait')}>A4縦・配慮事項付きデモを入力</button>
+            <button type="button" className="secondary" onClick={() => applyDisabilityEmploymentDemo('a3-landscape')}>A3横・配慮事項付きデモを入力</button>
           </div>
         </div>
         <p className="output-guidance">右側のPDFプレビューで内容を確認し、PDFを表示・保存してください。</p>
@@ -135,10 +136,10 @@ export function OutputPanel({
       <div className="output-card">
         <h3>入力データ保存</h3>
         <p>入力内容をJSONファイルとして保存し、後からこの画面に読み込めます。</p>
-        {resume.applicationType === 'disability' ? (
-          <p className="warning-text">障害者雇用応募では、配慮事項シートの入力内容も入力データに含まれます。</p>
+        {hasAccommodation ? (
+          <p className="warning-text">配慮事項シートを有効にしているため、その入力内容もJSONファイルに含まれます。</p>
         ) : (
-          <p>一般応募では、配慮事項シートの入力内容は入力データに含めません。</p>
+          <p>追加書類が無効の場合、配慮事項の入力内容はJSONファイルに含めません。</p>
         )}
         <label className="check-row"><input type="checkbox" checked={includePhotoInProject} onChange={(event) => setIncludePhotoInProject(event.target.checked)} />写真も入力データに含める</label>
         {includePhotoInProject ? <p className="warning-text">写真がJSONファイルに含まれます。共有PCや共有フォルダでの扱いに注意してください。</p> : <p>既定では写真を入力データに含めません。</p>}

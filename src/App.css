@@ -183,6 +183,17 @@ button.ghost-danger:disabled { background: var(--color-danger); }
   letter-spacing: 0;
 }
 
+.app-header nav {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 16px;
+}
+
+.app-header nav a {
+  color: var(--color-primary);
+}
+
 .header-copy {
   margin: 8px 0 0;
   color: var(--color-text-muted);
@@ -1694,3 +1705,29 @@ select:user-invalid {
 .pwa-update-actions .pwa-update-dismiss:hover {
   background: var(--color-bg-alt);
 }
+.app-brand {
+  color: inherit;
+  font-family: Georgia, "Noto Serif JP", serif;
+  font-size: clamp(1.6rem, 3vw, 2.2rem);
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.document-manager {
+  background: var(--panel, #fff);
+  border: 1px solid var(--line, #d5ddd8);
+  border-radius: 12px;
+  margin-bottom: 16px;
+  padding: 18px;
+}
+
+.document-manager h2 { margin-top: 0; font-size: 1rem; }
+.document-manager p { font-size: .85rem; line-height: 1.6; }
+.document-name-field { display: grid; gap: 6px; margin: 14px 0; }
+.document-name-field input { width: 100%; min-height: 42px; padding: 8px 10px; }
+.document-list { display: grid; gap: 8px; margin: 16px 0 0; padding: 0; list-style: none; }
+.document-list li { display: grid; gap: 8px; padding: 12px; border: 1px solid #d5ddd8; border-radius: 8px; }
+.document-list li[aria-current="true"] { border-color: #2f5d50; background: #edf5f1; }
+.document-list small { display: block; color: #5e6b66; margin-top: 3px; }
+.document-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+.document-actions button { min-height: 36px; padding: 6px 10px; font-size: .8rem; }

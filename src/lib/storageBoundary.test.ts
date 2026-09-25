@@ -11,11 +11,13 @@ const sourceFiles = (dir: string): string[] =>
   });
 
 describe('browser storage boundary', () => {
-  it('does not use browser storage for resume data in production source', () => {
+  it('uses IndexedDB for resume documents and localStorage only for non-PII consent', () => {
     const combined = sourceFiles(sourceRoot).map((file) => readFileSync(file, 'utf8')).join('\n');
 
-    expect(combined).not.toMatch(/localStorage/);
-    expect(combined).not.toMatch(/sessionStorage/);
-    expect(combined).not.toMatch(/indexedDB/i);
+    expect(combined).not.toMatch(/\bsessionStorage\s*[.[]/);
+    expect(combined).toContain("localStorage.getItem('rirekisho-studio:storage-consent')");
+    expect(combined).not.toMatch(/localStorage\.(?:setItem|getItem)\([^)]*(?:name|address|phone|photo|accommodation)/i);
+    expect(combined).toContain("const DATABASE_NAME = 'rirekisho-studio'");
+    expect(combined).toContain('indexedDB.open(DATABASE_NAME');
   });
 });
