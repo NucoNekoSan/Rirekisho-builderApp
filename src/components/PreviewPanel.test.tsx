@@ -1,0 +1,123 @@
+import { fireEvent, render, screen } from '@testing-library/react';
+import { describe, expect, it, vi } from 'vitest';
+import { PreviewPanel } from './PreviewPanel';
+
+describe('PreviewPanel', () => {
+  it('routes preview, scale, dialog, and PDF actions to their handlers', () => {
+    const setPreviewScale = vi.fn();
+    const setPreviewPage = vi.fn();
+    const onOpenPreviewDialog = vi.fn();
+    const runPdfAction = vi.fn();
+
+    render(
+      <PreviewPanel
+        previewScale="fit"
+        setPreviewScale={setPreviewScale}
+        showPageTabs
+        activePreviewPage="resume"
+        setPreviewPage={setPreviewPage}
+        resumePaperFormatLabel="A3横"
+        activePreviewFormat="A3横"
+        previewA4PageCount={1}
+        showAccommodationButtons
+        isGeneratingPdf={false}
+        isPdfOutputBlocked={false}
+        pdfOutputBlockReason=""
+        onOpenPreviewDialog={onOpenPreviewDialog}
+        runPdfAction={runPdfAction}
+        previewPaperClass="preview-paper-a3-landscape"
+        previewPagesRef={{ current: null }}
+        previewFrameHeight={420}
+        resumePreview={<div>履歴書プレビュー</div>}
+        accommodationPreview={<div>配慮事項プレビュー</div>}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: '全体表示' }));
+    fireEvent.click(screen.getByRole('button', { name: '拡大表示' }));
+    fireEvent.click(screen.getByRole('button', { name: '履歴書（A3横）' }));
+    fireEvent.click(screen.getByRole('button', { name: '配慮事項シート（A4縦）' }));
+    fireEvent.click(screen.getByRole('button', { name: 'PDFを大きく確認' }));
+    fireEvent.click(screen.getByRole('button', { name: '履歴書PDFを表示' }));
+    fireEvent.click(screen.getByRole('button', { name: '履歴書PDFを保存' }));
+    fireEvent.click(screen.getByRole('button', { name: '履歴書+配慮事項PDFを表示' }));
+    fireEvent.click(screen.getByRole('button', { name: '履歴書+配慮事項PDFを保存' }));
+
+    expect(setPreviewScale).toHaveBeenNthCalledWith(1, 'fit');
+    expect(setPreviewScale).toHaveBeenNthCalledWith(2, 'large');
+    expect(setPreviewPage).toHaveBeenNthCalledWith(1, 'resume');
+    expect(setPreviewPage).toHaveBeenNthCalledWith(2, 'accommodation');
+    expect(onOpenPreviewDialog).toHaveBeenCalledOnce();
+    expect(runPdfAction.mock.calls).toEqual([
+      ['open', false],
+      ['download', false],
+      ['open', true],
+      ['download', true],
+    ]);
+    expect(screen.getByText('履歴書プレビュー')).toBeInTheDocument();
+    expect(screen.getByText('PDF保存時は、この表示内容をA3横 1ページとして出力します。')).toBeInTheDocument();
+  });
+
+  it('renders the fallback page description without accommodation actions', () => {
+    render(
+      <PreviewPanel
+        previewScale="large"
+        setPreviewScale={vi.fn()}
+        showPageTabs={false}
+        activePreviewPage="accommodation"
+        setPreviewPage={vi.fn()}
+        resumePaperFormatLabel="A4縦"
+        activePreviewFormat="A4縦"
+        previewA4PageCount={null}
+        showAccommodationButtons={false}
+        isGeneratingPdf
+        isPdfOutputBlocked={false}
+        pdfOutputBlockReason=""
+        onOpenPreviewDialog={vi.fn()}
+        runPdfAction={vi.fn()}
+        previewPaperClass="preview-paper-a4-portrait"
+        previewPagesRef={{ current: null }}
+        previewFrameHeight={null}
+        resumePreview={<div>履歴書プレビュー</div>}
+        accommodationPreview={<div>配慮事項プレビュー</div>}
+      />,
+    );
+
+    expect(screen.getByText('配慮事項プレビュー')).toBeInTheDocument();
+    expect(screen.getByText('PDF保存時は、入力内容を意味単位でA4縦ページへ分割します。')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '履歴書+配慮事項PDFを表示' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '履歴書PDFを表示' })).toBeDisabled();
+  });
+
+  it('blocks every PDF output action with an accessible reason', () => {
+    render(
+      <PreviewPanel
+        previewScale="fit"
+        setPreviewScale={vi.fn()}
+        showPageTabs
+        activePreviewPage="resume"
+        setPreviewPage={vi.fn()}
+        resumePaperFormatLabel="A4縦"
+        activePreviewFormat="A4縦"
+        previewA4PageCount={2}
+        showAccommodationButtons
+        isGeneratingPdf={false}
+        isPdfOutputBlocked
+        pdfOutputBlockReason="A4縦2ページに収まりません。"
+        onOpenPreviewDialog={vi.fn()}
+        runPdfAction={vi.fn()}
+        previewPaperClass="preview-paper-a4-portrait"
+        previewPagesRef={{ current: null }}
+        previewFrameHeight={null}
+        resumePreview={<div>履歴書プレビュー</div>}
+        accommodationPreview={<div>配慮事項プレビュー</div>}
+      />,
+    );
+
+    expect(screen.getByRole('alert')).toHaveTextContent('A4縦2ページに収まりません。');
+    expect(screen.getByRole('button', { name: '履歴書PDFを表示' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: '履歴書PDFを保存' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: '履歴書+配慮事項PDFを表示' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: '履歴書+配慮事項PDFを保存' })).toBeDisabled();
+  });
+});

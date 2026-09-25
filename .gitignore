@@ -1,0 +1,11 @@
+node_modules
+dist
+*.local
+vite-dev.*.log
+*.log
+coverage/
+playwright-report/
+test-results/
+.DS_Store
+.idea/
+.codex/

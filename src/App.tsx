@@ -1,0 +1,665 @@
+// メイン画面: 入力フォーム・プレビュー・PDF出力を統合した単一ページアプリケーション
+import { useEffect, useMemo, useRef, useState } from 'react';
+import type { ChangeEvent } from 'react';
+import './App.css';
+import { EditableRows } from './components/EditableRows';
+import { FormSection, TextField, TextArea, SelectField, ToggleText } from './components/FormFields';
+import { OutputPanel } from './components/OutputPanel';
+import { AccommodationPage, ResumeA3Page, ResumePage } from './components/PdfPages';
+import { PreviewPanel, type PreviewPage, type PreviewScale } from './components/PreviewPanel';
+import { getAccommodationPrintFields } from './lib/accommodation';
+import { PHOTO_ACCEPTED_EXTENSIONS, PHOTO_MAX_FILE_SIZE_MB, RESUME_APPEAL_MAX_LENGTH } from './lib/config';
+import { calculateAgeFromDateInput } from './lib/dateFormat';
+import { createDefaultState, createDisabilityEmploymentDemoState } from './lib/defaults';
+import { downloadPdfFromElements, openPdfFromElements, type PdfSourceElement } from './browser/pdfRenderer';
+import { processPhotoFile, rotatePhotoClockwise } from './browser/photoLoader';
+import { downloadTextFile } from './browser/downloadFile';
+import { buildAccommodationPrintPages, buildResumePrintPages } from './lib/printPagination';
+import { parseProjectFile, serializeProjectFile } from './lib/projectFile';
+import { usePostalLookup, type PostalLookupState } from './hooks/usePostalLookup';
+import { useOnlineStatus } from './hooks/useOnlineStatus';
+import { useGridKeyboardNav } from './hooks/useGridKeyboardNav';
+import { useResumeEditor } from './hooks/useResumeEditor';
+import { getResumeSectionStatus, sectionStatusClass, type SectionStatus } from './lib/sectionStatus';
+import type { PdfPaperFormat } from './lib/types';
+
+/** 左メニューに表示するセクション一覧（表示順＝この配列の順序） */
+const sections = [
+  { id: 'basic', label: '基本情報' },
+  { id: 'photo', label: '写真' },
+  { id: 'history', label: '学歴・職歴' },
+  { id: 'license', label: '免許・資格' },
+  { id: 'appeal', label: '志望動機・希望' },
+  { id: 'accommodation', label: '配慮事項' },
+  { id: 'output', label: '保存・PDF' },
+] as const;
+
+type SectionId = (typeof sections)[number]['id'];
+type PostalLookupTarget = 'primary' | 'contact';
+
+const pdfPaperLabel = (format: PdfPaperFormat) => (format === 'a3-landscape' ? 'A3横' : 'A4縦');
+const A4_PDF_OUTPUT_BLOCK_MESSAGE = '現在の入力量はA4縦2ページに収まらないため、PDFを表示・保存できません。内容を短くするか、A3横を選択してください。';
+const appealLengthError = (label: string, value: string) => (
+  value.length > RESUME_APPEAL_MAX_LENGTH
+    ? `${label}は${RESUME_APPEAL_MAX_LENGTH}文字以内にしてください（現在${value.length}文字）。`
+    : ''
+);
+
+function App() {
+  // --- アプリケーション状態 ---
+  const {
+    state,
+    setState,
+    resume,
+    accommodation,
+    basicFieldErrors,
+    clearBasicFieldErrors,
+    setResume,
+    updateBasic,
+    handleBasicFieldBlur,
+    updateResumeField,
+    updateAccommodationField,
+    updateResumeAlignment,
+    resumeAlignmentProps,
+    accommodationAlignmentProps,
+    updateHistory,
+    updateQualification,
+    addHistory,
+    addQualification,
+    removeRow,
+    moveRow,
+  } = useResumeEditor();
+  const [activeSection, setActiveSection] = useState<SectionId>('basic');
+  const [includePhotoInProject, setIncludePhotoInProject] = useState(false);
+  const [statusMessage, setStatusMessage] = useState('');
+  const [errorMessage, setErrorMessage] = useState('');
+  const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
+  const isOnline = useOnlineStatus();
+  const { handleKeyDown: gridKeyDown } = useGridKeyboardNav();
+
+  // --- プレビュー表示状態 ---
+  const [previewScale, setPreviewScale] = useState<PreviewScale>('fit');
+  const [previewPage, setPreviewPage] = useState<PreviewPage>('resume');
+  const [previewFrameHeight, setPreviewFrameHeight] = useState<number | null>(null);
+  const [previewA4PageCount, setPreviewA4PageCount] = useState<number | null>(null);
+  const [visibleFormattingSections, setVisibleFormattingSections] = useState<Partial<Record<SectionId, boolean>>>({});
+
+  // --- DOM参照（PDF出力用の隠しDOM要素とダイアログ） ---
+  const exportResumeRef = useRef<HTMLElement | null>(null);
+  const exportAccommodationRef = useRef<HTMLElement | null>(null);
+  const previewPagesRef = useRef<HTMLDivElement | null>(null);
+  const previewContentRef = useRef<HTMLElement | null>(null);
+  const clearDialogRef = useRef<HTMLDialogElement | null>(null);
+  const previewDialogRef = useRef<HTMLDialogElement | null>(null);
+
+  // --- 派生値（stateから算出されるUI表示用の値） ---
+  const accommodationFields = useMemo(() => getAccommodationPrintFields(accommodation), [accommodation]);
+  const activePreviewPage: PreviewPage = resume.applicationType === 'disability' ? previewPage : 'resume';
+  const resumePaperFormat = resume.pdfPaperFormat;
+  const resumePaperFormatLabel = pdfPaperLabel(resumePaperFormat);
+  const activePreviewFormat = activePreviewPage === 'resume' ? resumePaperFormatLabel : 'A4縦';
+  const previewPaperClass = activePreviewPage === 'resume' ? `preview-paper-${resumePaperFormat}` : 'preview-paper-a4-portrait';
+  const resumeA4PageCount = useMemo(() => buildResumePrintPages(resume).length, [resume]);
+  const accommodationA4PageCount = useMemo(() => buildAccommodationPrintPages(accommodation).length, [accommodation]);
+  const resumeA4PageWarning = resumePaperFormat === 'a4-portrait' && resumeA4PageCount > 2;
+  const resumeA3DensityWarning = resumePaperFormat === 'a3-landscape' && resumeA4PageCount > 2;
+  const accommodationPageWarning = resume.applicationType === 'disability' && accommodationA4PageCount > 1;
+  const motivationLengthError = appealLengthError('志望動機', resume.motivation);
+  const selfPrLengthError = appealLengthError('自己PR', resume.selfPr);
+  const resumeAppealLengthWarning = [motivationLengthError, selfPrLengthError].filter(Boolean).join(' ');
+  const isPdfOutputBlocked = Boolean(resumeAppealLengthWarning) || resumeA4PageWarning;
+  const pdfOutputBlockReason = resumeAppealLengthWarning || A4_PDF_OUTPUT_BLOCK_MESSAGE;
+  const calculatedAge = calculateAgeFromDateInput(resume.basic.birthDate, new Date());
+
+  // --- 郵便番号→住所自動検索 ---
+  const primaryLookup = usePostalLookup({
+    postalCode: resume.basic.postalCode,
+    currentAddress: resume.basic.address,
+    setAddress: (address) =>
+      setResume((current) => ({ ...current, basic: { ...current.basic, address } })),
+  });
+
+  const contactLookup = usePostalLookup({
+    postalCode: resume.basic.contactPostalCode,
+    currentAddress: resume.basic.contactAddress,
+    setAddress: (contactAddress) =>
+      setResume((current) => ({ ...current, basic: { ...current.basic, contactAddress } })),
+  });
+
+  const postalLookups: Record<PostalLookupTarget, PostalLookupState> = {
+    primary: primaryLookup.lookup,
+    contact: contactLookup.lookup,
+  };
+
+  const applyPostalLookupCandidate = (target: PostalLookupTarget) => {
+    (target === 'primary' ? primaryLookup : contactLookup).applyCandidate();
+  };
+
+  const resetPostalLookups = () => {
+    primaryLookup.reset();
+    contactLookup.reset();
+  };
+
+  const resetEphemeralState = (resetSaveOptions = false) => {
+    resetPostalLookups();
+    clearBasicFieldErrors();
+    if (resetSaveOptions) setIncludePhotoInProject(false);
+    setErrorMessage('');
+  };
+
+  // プレビューの高さ・ページ数をCSSスケールから逆算して同期する
+  useEffect(() => {
+    const content = previewContentRef.current;
+    const wrapper = previewPagesRef.current;
+    if (!content || !wrapper) {
+      setPreviewFrameHeight(null);
+      setPreviewA4PageCount(null);
+      return;
+    }
+
+    const updatePreviewMetrics = () => {
+      const scale = Number.parseFloat(getComputedStyle(wrapper).getPropertyValue('--preview-scale'));
+      const safeScale = Number.isFinite(scale) && scale > 0 ? scale : 1;
+      const contentHeight = content.offsetHeight;
+      if (contentHeight <= 0) return;
+
+      const nextFrameHeight = Math.ceil(contentHeight * safeScale);
+      const nextPageCount = Math.max(1, content.querySelectorAll('.pdf-page').length);
+
+      setPreviewFrameHeight((current) => (current === nextFrameHeight ? current : nextFrameHeight));
+      setPreviewA4PageCount((current) => (current === nextPageCount ? current : nextPageCount));
+    };
+
+    updatePreviewMetrics();
+    window.addEventListener('resize', updatePreviewMetrics);
+    if (typeof ResizeObserver === 'undefined') {
+      return () => window.removeEventListener('resize', updatePreviewMetrics);
+    }
+
+    const observer = new ResizeObserver(updatePreviewMetrics);
+    observer.observe(content);
+    return () => {
+      observer.disconnect();
+      window.removeEventListener('resize', updatePreviewMetrics);
+    };
+  }, [activePreviewPage, previewScale, resume, accommodation]);
+
+  const isFormattingVisible = (sectionId: SectionId) => visibleFormattingSections[sectionId] === true;
+
+  const toggleFormattingSection = (sectionId: SectionId) => {
+    setVisibleFormattingSections((current) => ({ ...current, [sectionId]: !current[sectionId] }));
+  };
+
+  const sectionStatus = (sectionId: SectionId): SectionStatus => {
+    return getResumeSectionStatus(sectionId, resume, accommodationFields.length > 0);
+  };
+
+  const goToSection = (id: SectionId) => {
+    setActiveSection(id);
+    document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
+
+  const switchToDisabilityApplication = () => {
+    updateResumeField('applicationType', 'disability');
+    setPreviewPage('accommodation');
+    setActiveSection('accommodation');
+    setStatusMessage('障害者雇用応募に切り替えました。配慮事項シートを入力できます。');
+  };
+
+  // --- 写真処理 ---
+  const handlePhotoChange = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file) return;
+    setErrorMessage('');
+    try {
+      const photo = await processPhotoFile(file);
+      setResume((current) => ({ ...current, photo }));
+      setStatusMessage('写真を取り込み、履歴書用の比率で切り抜きました。');
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : '写真を取り込めませんでした。');
+    }
+  };
+
+  const rotatePhoto = async () => {
+    if (!resume.photo) return;
+    setErrorMessage('');
+    try {
+      const photo = await rotatePhotoClockwise(resume.photo);
+      setResume((current) => ({ ...current, photo }));
+      setStatusMessage('写真を90度回転しました。');
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : '写真を回転できませんでした。');
+    }
+  };
+
+  // --- プロジェクトファイル保存・読込 ---
+  const saveProject = () => {
+    const text = serializeProjectFile(state, includePhotoInProject);
+    downloadTextFile('rirekisho-project.json', text);
+    const photoMessage = includePhotoInProject ? '写真あり' : '写真なし';
+    const accommodationMessage = resume.applicationType === 'disability' ? '配慮事項あり' : '配慮事項なし';
+    setStatusMessage(`入力データを保存しました（${photoMessage}、${accommodationMessage}）。`);
+  };
+
+  const loadProject = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file) return;
+    try {
+      const text = await file.text();
+      setState(parseProjectFile(text));
+      resetEphemeralState();
+      setStatusMessage('入力データを読み込みました。');
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : '入力データを読み込めませんでした。');
+    }
+  };
+
+  const clearAll = () => {
+    setState(createDefaultState());
+    resetEphemeralState(true);
+    setStatusMessage('この画面上の入力内容を消去しました。');
+    clearDialogRef.current?.close();
+  };
+
+  const applyDisabilityEmploymentDemo = (paperFormat: PdfPaperFormat) => {
+    const demoState = createDisabilityEmploymentDemoState();
+    setState({
+      ...demoState,
+      resume: {
+        ...demoState.resume,
+        pdfPaperFormat: paperFormat,
+      },
+    });
+    resetEphemeralState(true);
+    setPreviewPage('resume');
+    setStatusMessage(`${pdfPaperLabel(paperFormat)}・障害者雇用デモを入力しました。右側のPDFプレビューで確認できます。`);
+  };
+
+  // --- PDF生成（隠しDOMからページ要素を収集→html2canvas→jsPDF） ---
+  const pdfElements = (includeAccommodation: boolean): PdfSourceElement[] => {
+    const elements: PdfSourceElement[] = exportResumeRef.current
+      ? Array.from(exportResumeRef.current.querySelectorAll<HTMLElement>('.pdf-page')).map((element) => ({
+          element,
+          paperFormat: resumePaperFormat,
+        }))
+      : [];
+    if (includeAccommodation && exportAccommodationRef.current) {
+      elements.push(...Array.from(exportAccommodationRef.current.querySelectorAll<HTMLElement>('.pdf-page')).map((element) => ({
+        element,
+        paperFormat: 'a4-portrait' as const,
+      })));
+    }
+    return elements;
+  };
+
+  const capturePreviewContent = (node: HTMLElement | null) => {
+    previewContentRef.current = node;
+  };
+
+  const runPdfAction = async (mode: 'open' | 'download', includeAccommodation: boolean) => {
+    if (isPdfOutputBlocked) {
+      setErrorMessage(pdfOutputBlockReason);
+      return;
+    }
+    const elements = pdfElements(includeAccommodation);
+    if (elements.length === 0) return;
+    setIsGeneratingPdf(true);
+    setErrorMessage('');
+    try {
+      const fileName = includeAccommodation
+        ? (resumePaperFormat === 'a3-landscape' ? 'rirekisho-a3-and-accommodation.pdf' : 'rirekisho-and-accommodation.pdf')
+        : (resumePaperFormat === 'a3-landscape' ? 'rirekisho-a3.pdf' : 'rirekisho.pdf');
+      if (mode === 'open') {
+        await openPdfFromElements(elements, fileName);
+      } else {
+        await downloadPdfFromElements(elements, fileName);
+      }
+      setStatusMessage('PDFを生成しました。');
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : 'PDFを生成できませんでした。');
+    } finally {
+      setIsGeneratingPdf(false);
+    }
+  };
+
+  const openPreviewDialog = () => {
+    previewDialogRef.current?.showModal();
+  };
+
+  const renderResumePdf = (captureRef?: (node: HTMLElement | null) => void) =>
+    resumePaperFormat === 'a3-landscape'
+      ? <ResumeA3Page resume={resume} captureRef={captureRef} />
+      : <ResumePage resume={resume} captureRef={captureRef} />;
+
+  const basicFormattingVisible = isFormattingVisible('basic');
+  const historyFormattingVisible = isFormattingVisible('history');
+  const licenseFormattingVisible = isFormattingVisible('license');
+  const appealFormattingVisible = isFormattingVisible('appeal');
+  const accommodationFormattingVisible = isFormattingVisible('accommodation');
+
+  // --- JSX描画 ---
+  return (
+    <div className="app-shell">
+      <a className="skip-link" href="#main-content">入力フォームへスキップ</a>
+      <header className="app-header">
+        <div>
+          <h1>履歴書作成ツール</h1>
+          <p className="header-copy">一般応募と障害者雇用応募の書類をPDFで作成できます。</p>
+        </div>
+      </header>
+
+      <main id="main-content" className="workspace" tabIndex={-1}>
+        <aside className="side-panel" aria-label="作成メニュー">
+          <section className="application-card">
+            <h2>応募種別</h2>
+            <label className="radio-card">
+              <input type="radio" name="applicationType" checked={resume.applicationType === 'general'} onChange={() => updateResumeField('applicationType', 'general')} />
+              <span>一般応募</span>
+            </label>
+            <label className="radio-card">
+              <input type="radio" name="applicationType" checked={resume.applicationType === 'disability'} onChange={() => updateResumeField('applicationType', 'disability')} />
+              <span>障害者雇用応募</span>
+            </label>
+            <p>障害者雇用応募では、履歴書に加えて配慮事項シートを作成できます。</p>
+          </section>
+
+          <nav className="section-nav" aria-label="入力セクション">
+            {sections.map((section) => {
+              const status = sectionStatus(section.id);
+              return (
+                <button
+                  key={section.id}
+                  type="button"
+                  className={activeSection === section.id ? 'active' : ''}
+                  aria-current={activeSection === section.id ? 'true' : undefined}
+                  onClick={() => goToSection(section.id)}
+                >
+                  <span>{section.label}</span>
+                  <span className={`section-state ${sectionStatusClass(status)}`}>
+                    {status}
+                  </span>
+                </button>
+              );
+            })}
+          </nav>
+
+          <nav className="section-nav side-panel-jump-nav" aria-label="ページ内ジャンプ">
+            <button
+              type="button"
+              onClick={() => document.getElementById('preview-panel')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
+            >
+              <span>PDFプレビューへ移動</span>
+              <span className="section-state">→</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => window.open(`${import.meta.env.BASE_URL}manual/index.html`, '_blank', 'noopener')}
+            >
+              <span>マニュアルを開く</span>
+              <span className="section-state">↗</span>
+            </button>
+          </nav>
+        </aside>
+
+        <section className="editor" aria-label="履歴書入力フォーム">
+          {!isOnline ? <div className="notice offline-notice" role="status">オフラインです。郵便番号検索は利用できません。</div> : null}
+          {statusMessage ? <div className="notice" role="status">{statusMessage}</div> : null}
+          {errorMessage ? <div className="alert" role="alert">{errorMessage}</div> : null}
+
+          <FormSection
+              id="basic"
+              title="基本情報"
+              description="氏名、住所、連絡先を入力します。"
+              guidance={[
+                '郵便番号や電話番号はハイフンなしで入力できます。',
+                '年齢は生年月日から自動計算されます。年齢欄への直接入力は不要です。',
+                '入力欄の下にある注意を確認しながら進めてください。',
+              ]}
+              status={sectionStatus('basic')}
+              formattingVisible={basicFormattingVisible}
+              onToggleFormatting={() => toggleFormattingSection('basic')}
+            >
+              <div className="form-grid two" onKeyDown={gridKeyDown}>
+                <TextField label="氏名" value={resume.basic.name} onChange={(value) => updateBasic('name', value)} autoComplete="name" placeholder="山田 太郎" showAlignmentControl={basicFormattingVisible} {...resumeAlignmentProps('basic.name')} />
+                <TextField label="ふりがな" value={resume.basic.furigana} onChange={(value) => updateBasic('furigana', value)} placeholder="やまだ たろう" showAlignmentControl={basicFormattingVisible} {...resumeAlignmentProps('basic.furigana')} />
+                <TextField label="生年月日" type="date" value={resume.basic.birthDate} onChange={(value) => updateBasic('birthDate', value)} autoComplete="bday" hint="年齢計算に使います。" showAlignmentControl={basicFormattingVisible} {...resumeAlignmentProps('basic.birthDate')} />
+                <TextField label="年齢" value={calculatedAge} onChange={() => undefined} readOnly hint="生年月日から自動計算します。" showAlignmentControl={basicFormattingVisible} {...resumeAlignmentProps('basic.age')} />
+                <fieldset className="field choice-field">
+                  <legend>PDFの日付表示</legend>
+                  <div className="segmented-radios">
+                    <label><input type="radio" name="eraMode" checked={resume.eraMode === 'western'} onChange={() => updateResumeField('eraMode', 'western')} />西暦</label>
+                    <label><input type="radio" name="eraMode" checked={resume.eraMode === 'japanese'} onChange={() => updateResumeField('eraMode', 'japanese')} />和暦</label>
+                  </div>
+                </fieldset>
+                <SelectField label="性別欄" value={resume.basic.gender} onChange={(value) => updateBasic('gender', value)} showAlignmentControl={basicFormattingVisible} {...resumeAlignmentProps('basic.gender')}>
+                  <option value="">未選択</option><option value="female">女性</option><option value="male">男性</option><option value="no_answer">回答しない</option><option value="hidden">PDFに表示しない</option>
+                </SelectField>
+                <div className="postal-field">
+                  <TextField label="郵便番号" value={resume.basic.postalCode} onChange={(value) => updateBasic('postalCode', value)} onBlur={() => handleBasicFieldBlur('postalCode')} autoComplete="postal-code" inputMode="numeric" placeholder="1600022" guidance={['7桁の数字で入力できます。ハイフンは入力後に自動で入ります。', '住所検索では、郵便番号だけを外部の住所検索サービスに送ります。']} error={basicFieldErrors.postalCode} showAlignmentControl={basicFormattingVisible} {...resumeAlignmentProps('basic.postalCode')} />
+                  <PostalLookupFeedback addressLabel="現住所" lookup={postalLookups.primary} onApply={() => applyPostalLookupCandidate('primary')} />
+                </div>
+                <TextField label="現住所" value={resume.basic.address} onChange={(value) => updateBasic('address', value)} autoComplete="street-address" placeholder="東京都新宿区新宿1-2-3 サンプルハイツ101" guidance="郵便番号で自動入力された場合も、番地・建物名を確認してください。" showAlignmentControl={basicFormattingVisible} {...resumeAlignmentProps('basic.address')} />
+                <TextField label="電話番号" type="tel" value={resume.basic.phone} onChange={(value) => updateBasic('phone', value)} onBlur={() => handleBasicFieldBlur('phone')} autoComplete="tel" inputMode="tel" placeholder="09012345678" guidance="ハイフンなしで入力できます。入力欄を離れると自動で整えます。" error={basicFieldErrors.phone} showAlignmentControl={basicFormattingVisible} {...resumeAlignmentProps('basic.phone')} />
+                <TextField label="メールアドレス" type="email" value={resume.basic.email} onChange={(value) => updateBasic('email', value)} onBlur={() => handleBasicFieldBlur('email')} autoComplete="email" inputMode="email" placeholder="taro.yamada@example.com" guidance="形式が違う場合は、入力欄を離れた後にメッセージを表示します。" error={basicFieldErrors.email} showAlignmentControl={basicFormattingVisible} {...resumeAlignmentProps('basic.email')} />
+                <div className="postal-field">
+                  <TextField label="連絡先郵便番号" value={resume.basic.contactPostalCode} onChange={(value) => updateBasic('contactPostalCode', value)} onBlur={() => handleBasicFieldBlur('contactPostalCode')} autoComplete="postal-code" inputMode="numeric" placeholder="1600022" guidance={['7桁の数字で入力できます。ハイフンは入力後に自動で入ります。', '住所検索では、郵便番号だけを外部の住所検索サービスに送ります。']} error={basicFieldErrors.contactPostalCode} showAlignmentControl={basicFormattingVisible} {...resumeAlignmentProps('basic.contactPostalCode')} />
+                  <PostalLookupFeedback addressLabel="連絡先住所" lookup={postalLookups.contact} onApply={() => applyPostalLookupCandidate('contact')} />
+                </div>
+                <TextField label="連絡先住所" value={resume.basic.contactAddress} onChange={(value) => updateBasic('contactAddress', value)} autoComplete="street-address" placeholder="同上" guidance="現住所と同じ場合は「同上」と入力できます。" showAlignmentControl={basicFormattingVisible} {...resumeAlignmentProps('basic.contactAddress')} />
+                <TextField label="連絡先電話番号" type="tel" value={resume.basic.contactPhone} onChange={(value) => updateBasic('contactPhone', value)} onBlur={() => handleBasicFieldBlur('contactPhone')} autoComplete="tel" inputMode="tel" placeholder="09012345678" guidance="ハイフンなしで入力できます。入力欄を離れると自動で整えます。" error={basicFieldErrors.contactPhone} showAlignmentControl={basicFormattingVisible} {...resumeAlignmentProps('basic.contactPhone')} />
+              </div>
+          </FormSection>
+
+          <FormSection id="photo" title="写真" description={`JPG/JPEG形式、${PHOTO_MAX_FILE_SIZE_MB}MB以下の写真を取り込めます。`} status={sectionStatus('photo')}>
+              <div className="photo-editor">
+                <div className="photo-preview" aria-label="写真プレビュー">
+                  {resume.photo ? <img src={resume.photo.dataUrl} alt="取り込み済みの履歴書用写真" /> : <span>写真なし</span>}
+                </div>
+                <div className="photo-controls">
+                  <label className="file-button">写真を選択
+                    <input type="file" accept={PHOTO_ACCEPTED_EXTENSIONS.join(',')} onChange={handlePhotoChange} />
+                  </label>
+                  <button type="button" onClick={rotatePhoto} disabled={!resume.photo}>90度回転</button>
+                  <button type="button" className="ghost-danger" onClick={() => setResume((current) => ({ ...current, photo: null }))} disabled={!resume.photo}>写真を削除</button>
+                  <p>取り込んだ写真は中央で4:3縦長に切り抜き、PDFの写真欄へ配置します。</p>
+                </div>
+              </div>
+          </FormSection>
+
+          <FormSection
+              id="history"
+              title="学歴・職歴"
+              description="年月と内容を入力します。"
+              guidance="年月が分からない場合は、支援員と確認してから入力してください。"
+              status={sectionStatus('history')}
+              formattingVisible={historyFormattingVisible}
+              onToggleFormatting={() => toggleFormattingSection('history')}
+            >
+              <EditableRows rows={resume.histories} groupLabel="学歴・職歴" alignmentKind="histories" alignments={resume.textAlignments} showAlignmentControls={historyFormattingVisible} onAlignmentChange={updateResumeAlignment} onChange={updateHistory} onAdd={addHistory} onRemove={(id) => removeRow('histories', id)} onMove={(id, direction) => moveRow('histories', id, direction)} addLabel="学歴・職歴を追加" onKeyDown={gridKeyDown} />
+          </FormSection>
+
+          <FormSection
+              id="license"
+              title="免許・資格"
+              description="取得年月と資格名を入力します。"
+              guidance="免許・資格名は、証明書や免許証の表記に合わせると確認しやすくなります。"
+              status={sectionStatus('license')}
+              formattingVisible={licenseFormattingVisible}
+              onToggleFormatting={() => toggleFormattingSection('license')}
+            >
+              <EditableRows rows={resume.qualifications} groupLabel="免許・資格" alignmentKind="qualifications" alignments={resume.textAlignments} showAlignmentControls={licenseFormattingVisible} onAlignmentChange={updateResumeAlignment} onChange={updateQualification} onAdd={addQualification} onRemove={(id) => removeRow('qualifications', id)} onMove={(id, direction) => moveRow('qualifications', id, direction)} addLabel="免許・資格を追加" onKeyDown={gridKeyDown} />
+          </FormSection>
+
+          <FormSection
+              id="appeal"
+              title="志望動機・本人希望"
+              description={resume.applicationType === 'disability' ? '必要な範囲で、勤務上相談したいことも書けます。' : '応募先に合わせて入力します。'}
+              guidance={[
+                '志望動機・自己PR・本人希望欄はPDFに出力されます。',
+                '作業メモはPDFに出ません。支援員と確認する内容に使えます。',
+              ]}
+              status={sectionStatus('appeal')}
+              formattingVisible={appealFormattingVisible}
+              onToggleFormatting={() => toggleFormattingSection('appeal')}
+            >
+              <div className="form-grid two" onKeyDown={gridKeyDown}>
+                <TextArea label="志望動機" value={resume.motivation} onChange={(value) => updateResumeField('motivation', value)} hint="応募先で働きたい理由を書きます（350文字以内）。" guidance="PDFに出力される欄です。応募先に見せる内容だけを書きます。" placeholder="応募先で働きたい理由や活かせる経験" maxLength={RESUME_APPEAL_MAX_LENGTH} error={motivationLengthError} showAlignmentControl={appealFormattingVisible} {...resumeAlignmentProps('resume.motivation')} />
+                <TextArea label="自己PR" value={resume.selfPr} onChange={(value) => updateResumeField('selfPr', value)} hint="得意なこと、取り組んできたことを書きます（350文字以内）。" guidance="PDFに出力される欄です。得意なことや続けてきたことを書きます。" placeholder="得意なこと、続けて取り組んできたこと" maxLength={RESUME_APPEAL_MAX_LENGTH} error={selfPrLengthError} showAlignmentControl={appealFormattingVisible} {...resumeAlignmentProps('resume.selfPr')} />
+                <TextArea label="本人希望欄" value={resume.requests} onChange={(value) => updateResumeField('requests', value)} hint={resume.applicationType === 'disability' ? '勤務時間や通院など、相談したいことがある場合に記入します。' : '特にない場合は「貴社規定に従います。」など。'} guidance="PDFに出力される欄です。特に希望がない場合は「貴社規定に従います。」などにします。" placeholder="貴社規定に従います" showAlignmentControl={appealFormattingVisible} {...resumeAlignmentProps('resume.requests')} />
+                <TextArea label="作業メモ" value={resume.memo} onChange={(value) => updateResumeField('memo', value)} hint="支援員と確認するためのメモ欄です（PDFには出ません）。" guidance="このメモはPDFに出力されません。面接前の確認や下書きに使えます。" placeholder="面接前に確認したいこと" showAlignmentControl={appealFormattingVisible} {...resumeAlignmentProps('resume.memo')} />
+                <TextField label="通勤時間" value={resume.commuteTime} onChange={(value) => updateResumeField('commuteTime', value)} placeholder="約45分" showAlignmentControl={appealFormattingVisible} {...resumeAlignmentProps('resume.commuteTime')} />
+                <TextField label="扶養家族" value={resume.dependents} onChange={(value) => updateResumeField('dependents', value)} placeholder="0人" showAlignmentControl={appealFormattingVisible} {...resumeAlignmentProps('resume.dependents')} />
+                <TextField label="配偶者" value={resume.spouse} onChange={(value) => updateResumeField('spouse', value)} placeholder="無" showAlignmentControl={appealFormattingVisible} {...resumeAlignmentProps('resume.spouse')} />
+                <TextField label="配偶者の扶養義務" value={resume.spouseSupport} onChange={(value) => updateResumeField('spouseSupport', value)} placeholder="無" showAlignmentControl={appealFormattingVisible} {...resumeAlignmentProps('resume.spouseSupport')} />
+              </div>
+          </FormSection>
+
+          <FormSection
+              id="accommodation"
+              title="配慮事項シート"
+              description="障害者雇用応募で必要な場合だけ作成します。"
+              guidance={resume.applicationType === 'disability'
+                ? ['配慮事項シートは履歴書とは別ページでPDFに出力されます。', '応募先に共有してよい範囲だけ入力してください。']
+                : '一般応募では配慮事項シートを作成せず、PDFにも出力しません。'}
+              status={sectionStatus('accommodation')}
+              formattingVisible={accommodationFormattingVisible}
+              onToggleFormatting={resume.applicationType === 'disability' ? () => toggleFormattingSection('accommodation') : undefined}
+            >
+              {resume.applicationType !== 'disability' ? (
+                <div className="accommodation-locked">
+                  <h3>一般応募では配慮事項シートを作成しません</h3>
+                  <p>障害名、手帳、通院、服薬などの機微情報は、障害者雇用応募として作成する場合だけ入力できます。</p>
+                  <button type="button" onClick={switchToDisabilityApplication}>障害者雇用応募に切り替える</button>
+                </div>
+              ) : (
+                <div className="form-grid two" onKeyDown={gridKeyDown}>
+                  <ToggleText label="障害名・診断名" enabled={accommodation.includeDisabilityName} value={accommodation.disabilityName} onToggle={(value) => updateAccommodationField('includeDisabilityName', value)} onChange={(value) => updateAccommodationField('disabilityName', value)} placeholder="必要な範囲で記入します" showAlignmentControl={accommodationFormattingVisible} {...accommodationAlignmentProps('disabilityName')} />
+                  <ToggleText label="障害者手帳等" enabled={accommodation.includeCertificate} value={accommodation.certificate} onToggle={(value) => updateAccommodationField('includeCertificate', value)} onChange={(value) => updateAccommodationField('certificate', value)} placeholder="精神障害者保健福祉手帳 3級" showAlignmentControl={accommodationFormattingVisible} {...accommodationAlignmentProps('certificate')} />
+                  <ToggleText label="通院状況" enabled={accommodation.includeHospitalVisit} value={accommodation.hospitalVisit} onToggle={(value) => updateAccommodationField('includeHospitalVisit', value)} onChange={(value) => updateAccommodationField('hospitalVisit', value)} placeholder="月1回、主治医の診察があります" showAlignmentControl={accommodationFormattingVisible} {...accommodationAlignmentProps('hospitalVisit')} />
+                  <ToggleText label="服薬・体調管理" enabled={accommodation.includeMedication} value={accommodation.medication} onToggle={(value) => updateAccommodationField('includeMedication', value)} onChange={(value) => updateAccommodationField('medication', value)} placeholder="服薬により体調は安定しています" showAlignmentControl={accommodationFormattingVisible} {...accommodationAlignmentProps('medication')} />
+                  <ToggleText label="支援機関・連絡先" enabled={accommodation.includeSupportContact} value={accommodation.supportContact} onToggle={(value) => updateAccommodationField('includeSupportContact', value)} onChange={(value) => updateAccommodationField('supportContact', value)} placeholder="就労移行支援事業所名、担当者名など" showAlignmentControl={accommodationFormattingVisible} {...accommodationAlignmentProps('supportContact')} />
+                  <TextArea label="得意なこと・強み" value={accommodation.strengths} onChange={(value) => updateAccommodationField('strengths', value)} guidance="配慮事項シートに出力されます。応募先に共有してよい範囲で入力します。" placeholder="手順が決まっている作業を丁寧に続けられます" showAlignmentControl={accommodationFormattingVisible} {...accommodationAlignmentProps('strengths')} />
+                  <TextArea label="苦手な環境・状況" value={accommodation.difficultSituations} onChange={(value) => updateAccommodationField('difficultSituations', value)} guidance="配慮事項シートに出力されます。業務上相談したい内容を中心に書きます。" placeholder="急な予定変更が続くと混乱しやすいです" showAlignmentControl={accommodationFormattingVisible} {...accommodationAlignmentProps('difficultSituations')} />
+                  <TextArea label="お願いしたい配慮" value={accommodation.requestedAccommodations} onChange={(value) => updateAccommodationField('requestedAccommodations', value)} guidance="配慮事項シートに出力されます。働く上で必要な配慮を具体的に書きます。" placeholder="指示は口頭だけでなくメモでも確認できると助かります" showAlignmentControl={accommodationFormattingVisible} {...accommodationAlignmentProps('requestedAccommodations')} />
+                  <TextArea label="自分で行っている工夫" value={accommodation.selfCare} onChange={(value) => updateAccommodationField('selfCare', value)} guidance="配慮事項シートに出力されます。自分で取り組んでいる対策を書きます。" placeholder="作業前にメモを確認し、優先順位を整理しています" showAlignmentControl={accommodationFormattingVisible} {...accommodationAlignmentProps('selfCare')} />
+                  <TextArea label="体調悪化時のサイン" value={accommodation.warningSigns} onChange={(value) => updateAccommodationField('warningSigns', value)} guidance="配慮事項シートに出力されます。早めに気づける変化があれば書きます。" placeholder="集中が続かない、確認が増えるなどの傾向があります" showAlignmentControl={accommodationFormattingVisible} {...accommodationAlignmentProps('warningSigns')} />
+                </div>
+              )}
+          </FormSection>
+
+          <FormSection id="output" title="保存・PDF出力" description="サーバーには保存しません。必要な場合は入力データをダウンロードしてください。">
+              <OutputPanel
+                resume={resume}
+                accommodation={accommodation}
+                resumePaperFormatLabel={resumePaperFormatLabel}
+                resumeA4PageCount={resumeA4PageCount}
+                resumeA4PageWarning={resumeA4PageWarning}
+                resumeA3DensityWarning={resumeA3DensityWarning}
+                resumeAppealLengthWarning={resumeAppealLengthWarning}
+                accommodationFieldCount={accommodationFields.length}
+                accommodationA4PageCount={accommodationA4PageCount}
+                accommodationPageWarning={accommodationPageWarning}
+                includePhotoInProject={includePhotoInProject}
+                setIncludePhotoInProject={setIncludePhotoInProject}
+                updateResumeField={updateResumeField}
+                applyDisabilityEmploymentDemo={applyDisabilityEmploymentDemo}
+                saveProject={saveProject}
+                loadProject={loadProject}
+                onClear={() => clearDialogRef.current?.showModal()}
+              />
+          </FormSection>
+        </section>
+
+        <PreviewPanel
+          previewScale={previewScale}
+          setPreviewScale={setPreviewScale}
+          showPageTabs={resume.applicationType === 'disability'}
+          activePreviewPage={activePreviewPage}
+          setPreviewPage={setPreviewPage}
+          resumePaperFormatLabel={resumePaperFormatLabel}
+          activePreviewFormat={activePreviewFormat}
+          previewA4PageCount={previewA4PageCount}
+          showAccommodationButtons={resume.applicationType === 'disability'}
+          isGeneratingPdf={isGeneratingPdf}
+          isPdfOutputBlocked={isPdfOutputBlocked}
+          pdfOutputBlockReason={pdfOutputBlockReason}
+          onOpenPreviewDialog={openPreviewDialog}
+          runPdfAction={runPdfAction}
+          previewPaperClass={previewPaperClass}
+          previewPagesRef={previewPagesRef}
+          previewFrameHeight={previewFrameHeight}
+          resumePreview={renderResumePdf(capturePreviewContent)}
+          accommodationPreview={
+            <AccommodationPage accommodation={accommodation} eraMode={resume.eraMode} pdfFontFamily={resume.pdfFontFamily} captureRef={capturePreviewContent} />
+          }
+        />
+
+        {/* PDF出力用の隠しDOM: 画面外に配置し、html2canvasでキャプチャする */}
+        <div className="pdf-export-root" aria-hidden="true">
+          {renderResumePdf((node) => { exportResumeRef.current = node; })}
+          {resume.applicationType === 'disability' ? (
+            <AccommodationPage accommodation={accommodation} eraMode={resume.eraMode} pdfFontFamily={resume.pdfFontFamily} captureRef={(node) => { exportAccommodationRef.current = node; }} />
+          ) : null}
+        </div>
+      </main>
+
+      <dialog className="preview-dialog" ref={previewDialogRef} aria-labelledby="preview-dialog-title">
+        <form method="dialog">
+          <div className="preview-dialog-header">
+            <h2 id="preview-dialog-title">PDFを大きく確認</h2>
+            <button type="submit" className="secondary">閉じる</button>
+          </div>
+          <div className="preview-dialog-body">
+            {activePreviewPage === 'resume' ? (
+              renderResumePdf()
+            ) : (
+              <AccommodationPage accommodation={accommodation} eraMode={resume.eraMode} pdfFontFamily={resume.pdfFontFamily} />
+            )}
+          </div>
+        </form>
+      </dialog>
+
+      <dialog className="confirm-dialog" ref={clearDialogRef} aria-labelledby="clear-dialog-title" aria-describedby="clear-dialog-description">
+        <form method="dialog">
+          <h2 id="clear-dialog-title">入力内容をすべて消去しますか</h2>
+          <p id="clear-dialog-description">保存していない内容、取り込んだ写真、作成中の配慮事項はこの画面から消えます。この操作は元に戻せません。</p>
+          <div className="dialog-actions">
+            <button type="submit" className="secondary" value="cancel">キャンセル</button>
+            <button type="button" className="danger" onClick={clearAll}>消去する</button>
+          </div>
+        </form>
+      </dialog>
+    </div>
+  );
+}
+
+/** 郵便番号検索結果: 住所候補の表示＋反映ボタン */
+function PostalLookupFeedback({
+  addressLabel,
+  lookup,
+  onApply,
+}: {
+  addressLabel: string;
+  lookup: PostalLookupState;
+  onApply: () => void;
+}) {
+  if (lookup.status === 'idle') return null;
+
+  const isAlert = lookup.status === 'error' || lookup.status === 'not_found';
+
+  return (
+    <div className={`postal-lookup ${lookup.status}`} role={isAlert ? 'alert' : 'status'}>
+      <p>{lookup.message}</p>
+      {lookup.status === 'candidate' ? (
+        <button type="button" className="secondary compact-button" onClick={onApply}>
+          {addressLabel}に反映
+        </button>
+      ) : null}
+      <p className="postal-privacy-note">郵便番号のみを住所検索APIへ送信します。</p>
+    </div>
+  );
+}
+
+export default App;
